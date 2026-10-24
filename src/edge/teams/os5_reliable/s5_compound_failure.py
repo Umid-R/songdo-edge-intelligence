@@ -25,9 +25,9 @@ import tempfile
 import threading
 import time
 
-from edge.core.config import load_config
-from edge.core.ipc import StopFlag
-from edge.core.storage import Storage
+from edge.config import load_config
+from edge.ipc import StopFlag
+from edge.storage import Storage
 from edge.teams.os5_reliable import _common as c
 
 GATE_OPEN_LIMIT_S = c.RECOVERY_LIMIT_S + 1.0

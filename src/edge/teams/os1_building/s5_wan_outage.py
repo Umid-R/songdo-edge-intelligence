@@ -22,9 +22,9 @@ import threading
 import time
 from pathlib import Path
 
-from edge.core.config import load_config
-from edge.core.models import SensorEvent
-from edge.core.storage import Storage
+from edge.config import load_config
+from edge.models import SensorEvent
+from edge.storage import Storage
 from edge.decision import RuleEngine, dispatch
 
 ROOT = Path(__file__).resolve().parents[4]

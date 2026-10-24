@@ -6,10 +6,10 @@ import signal
 import time
 from queue import Empty
 
-from edge.core.ipc import STOP
-from edge.core.models import ProcessHealth, SensorEvent
-from edge.core.procfs import ProcSampler
-from edge.core.storage import Storage
+from edge.ipc import STOP
+from edge.models import ProcessHealth, SensorEvent
+from edge.procfs import ProcSampler
+from edge.storage import Storage
 from edge.decision import RuleEngine, dispatch
 
 

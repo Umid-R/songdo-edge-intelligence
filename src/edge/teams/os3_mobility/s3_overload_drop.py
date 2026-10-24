@@ -16,7 +16,7 @@ import queue
 import sys
 import time
 
-from edge.core.ipc import STOP, BoundedQueue
+from edge.ipc import STOP, BoundedQueue
 
 
 def _slow_consumer(q, out, delay_s):

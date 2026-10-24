@@ -19,9 +19,9 @@ import sys
 import tempfile
 import time
 
-from edge.core.config import load_config
-from edge.core.models import SensorEvent
-from edge.core.storage import Storage
+from edge.config import load_config
+from edge.models import SensorEvent
+from edge.storage import Storage
 from edge.decision import RuleEngine
 from edge.teams.os5_reliable._common import ROOT, gate_next_state
 

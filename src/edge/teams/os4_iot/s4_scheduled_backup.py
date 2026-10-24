@@ -30,9 +30,9 @@ import time
 
 import yaml
 
-from edge.core.config import load_config
-from edge.core.models import SensorEvent
-from edge.core.storage import Storage
+from edge.config import load_config
+from edge.models import SensorEvent
+from edge.storage import Storage
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
 HANDBOOK_LOCK = "/tmp/songdo_backup.lock"

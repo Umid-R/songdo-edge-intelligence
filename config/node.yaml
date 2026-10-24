@@ -9,7 +9,7 @@ paths:                          # relative paths are resolved from the repo root
   backups: data/backups
   pidfile: data/run/pids.json
   schema: sql/schema.sql
-  static: src/edge/ui
+  static: src/ui/static
   socket: /tmp/songdo_edge.sock
 
 network:

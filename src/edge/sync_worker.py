@@ -2,7 +2,7 @@
 import logging
 import signal
 
-from edge.core.storage import Storage
+from edge.storage import Storage
 
 log = logging.getLogger("edge.sync")
 

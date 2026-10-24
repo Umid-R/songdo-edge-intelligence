@@ -22,9 +22,9 @@ import sys
 import tempfile
 import time
 
-from edge.core.config import load_config
-from edge.core.models import EdgeDecision, SensorEvent
-from edge.core.storage import Storage
+from edge.config import load_config
+from edge.models import EdgeDecision, SensorEvent
+from edge.storage import Storage
 from edge.decision import RuleEngine
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))

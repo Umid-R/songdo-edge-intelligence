@@ -1,5 +1,5 @@
-# TEMPLATE (Ops owner: verify with docker compose). Run from the repo root:
-#   docker compose -f container/compose.yaml up --build
+# OCI compose file with CPU/RAM cgroup limits and a healthcheck. Run from the repo root:
+#   docker compose -f container/compose.yaml up --build      # dashboard: http://127.0.0.1:8000
 services:
   edge:
     build:

@@ -33,9 +33,9 @@ import tempfile
 import threading
 import time
 
-from edge.core.config import load_config
-from edge.core.models import SensorEvent
-from edge.core.storage import Storage
+from edge.config import load_config
+from edge.models import SensorEvent
+from edge.storage import Storage
 from edge.decision import RuleEngine
 from edge.teams.os2_robot.s3_estop_ttl import SafetyLatch
 

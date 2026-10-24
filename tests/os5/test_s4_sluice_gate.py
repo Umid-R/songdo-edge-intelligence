@@ -6,7 +6,7 @@ import unittest
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(ROOT, "src"))
 
-from edge.core.models import EdgeDecision   # noqa: E402
+from edge.models import EdgeDecision   # noqa: E402
 from edge.teams.os5_reliable import _common as c   # noqa: E402
 from edge.teams.os5_reliable import s4_sluice_gate as m   # noqa: E402
 

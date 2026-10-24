@@ -24,8 +24,8 @@ import sys
 import tempfile
 import time
 
-from edge.core.ipc import STOP, BoundedQueue, UnixSocketServer, unix_request
-from edge.core.procfs import read_proc
+from edge.ipc import STOP, BoundedQueue, UnixSocketServer, unix_request
+from edge.procfs import read_proc
 
 PERIOD_S = 0.05                 # LiDAR runs at 20 Hz
 STOP_DISTANCE_M = 0.8

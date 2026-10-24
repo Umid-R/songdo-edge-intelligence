@@ -7,7 +7,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 from edge.teams.os1_building import s4_contention_profiling as m  # noqa: E402
-from edge.core.storage import Storage  # noqa: E402
+from edge.storage import Storage  # noqa: E402
 
 
 class TestS4ContentionProfiling(unittest.TestCase):

@@ -19,9 +19,9 @@ import os
 import sys
 import tempfile
 
-from edge.core.config import load_config
-from edge.core.ipc import StopFlag
-from edge.core.storage import Storage
+from edge.config import load_config
+from edge.ipc import StopFlag
+from edge.storage import Storage
 from edge.teams.os5_reliable import _common as c
 
 

@@ -10,7 +10,7 @@ paths:
   backups: data/backups
   pidfile: data/run/os4_pids.json
   schema: sql/schema.sql
-  static: src/edge/ui
+  static: src/ui/static
   socket: /tmp/songdo_os4.sock
 
 network:

@@ -8,7 +8,7 @@ Test    : tests/os3/test_s2_priority_queue.py
 Run     : PYTHONPATH=src python -m edge.teams.os3_mobility.s2_priority_queue
 
 The shared core BoundedQueue has one level (drop oldest). This file adds a two-level
-queue on top of the same idea, without touching src/edge/core/: HIGH (alarms) and LOW
+queue on top of the same idea, without touching the shared src/edge/ipc.py: HIGH (alarms) and LOW
 (background logs) share ONE capacity. get() serves HIGH first. When the queue is full the
 oldest LOW item is dropped, so an alarm is never lost to background logging.
 """
