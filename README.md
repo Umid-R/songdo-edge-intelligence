@@ -12,7 +12,7 @@ all on one shared core. Python standard library plus `pyyaml` (and `psutil`, use
 outside Linux).
 
 **At a glance (all on one team machine, see [Results](#results)):** 25/25 scenarios pass · 87/87 unit
-tests pass · four 10-minute WAN outages with **zero lost and zero duplicated events** · the robot stopped
+tests pass · four 10-minute WAN outages with **zero lost and zero duplicated events** · systemd restarts the node 2 s after a SIGKILL · the Docker container runs healthy · the robot stopped
 for **162/162** obstacles while offline · the live dashboard keeps *Conserved: yes* through a cut and restore.
 
 ---
@@ -24,7 +24,7 @@ for **162/162** obstacles while offline · the live dashboard keeps *Conserved: 
 4. [What each scenario demonstrates](#what-each-scenario-demonstrates)
 5. [Results (screenshots)](#results)
 6. [File layout](#file-layout-as-in-the-course-readme)
-7. [Operations: systemd, backup, container](#operations)
+7. [Operations: systemd, backup, container](#operations) (results: Results §7)
 8. [Requirement map](#requirement-map-handbook-rubric--where-it-is)
 9. [Known gaps](#known-gaps-be-honest-about-them-in-the-defense)
 
@@ -187,6 +187,8 @@ all 25 scenarios plus the full test suite on a second Linux machine (Python 3.13
 | OS4-5 backlog drain | (simulated 6 h) | **PASS**, 360/360 acknowledged |
 | OS5-5, 10-min WAN cut + crash | `--cut 600` | **PASS**, recovered in 0.22 s, 240 = 240 delivered |
 | Step 5 dashboard (OS2) | `bash scripts/start_demo.sh OS2` | cut → outbox 132 queued, restore → 0, *Conserved: yes* |
+| systemd user service | `systemctl --user start songdo-edge@OS2` + SIGKILL | active (running); killed with status 9/KILL, **restarted automatically after 2 s** |
+| Docker container | `docker build` + `docker run` | built, **Up (healthy)**, dashboard served from the container |
 
 ### 1. Machine and preflight
 The test machine, then the preflight audit: kernel, shell, Python, SQLite and every required POSIX
@@ -276,6 +278,57 @@ and *Conserved* stays `yes` (330 = 198 delivered + 132 queued). No process resta
 *Conserved: yes*, still 0 restarts.
 
 ![Dashboard after restore](docs/images/13_dashboard_restored.png)
+
+### 7. Operations: systemd service and Docker container
+Both deployment paths were run on the same team machine (24 October 2026).
+
+**systemd user service.** `songdo-edge@OS2.service` runs the whole node under systemd: the
+supervisor (main PID) and its six workers sit in the service's cgroup, with the unit's limits enforced
+by the kernel — `Tasks: 9 (limit: 64)`, `Memory: 117.4M (max: 512M)`.
+
+```bash
+cp systemd/songdo-edge@.service ~/.config/systemd/user/ && systemctl --user daemon-reload
+systemctl --user start songdo-edge@OS2.service
+systemctl --user status songdo-edge@OS2.service --no-pager
+```
+![systemd service running](docs/images/15_systemd_running.png)
+
+**Automatic restart.** The service was killed on purpose with `systemctl --user kill -s SIGKILL`.
+systemd restarted it by itself: new main PID (1962110 → 1963758), new start time, and the node went
+straight back to work (e-stops firing, outbox draining).
+
+![systemd restarted the service after SIGKILL](docs/images/16_systemd_auto_restart.png)
+
+The journal records the exact sequence — started 07:19:06, `Main process exited, code=killed,
+status=9/KILL` at 07:20:06, `Scheduled restart job, restart counter is at 1`, started again at
+07:20:08 (**2 s**, matching `RestartSec=2`), and a clean stop at 07:21:10:
+
+```bash
+journalctl --user-unit songdo-edge@OS2.service -o short-iso --no-pager | grep -E "Started|Main process exited|Scheduled restart|Stopped"
+```
+![journalctl restart sequence](docs/images/17_systemd_journal.png)
+
+**Docker container.** The image (`container/Dockerfile`: Ubuntu 24.04, Python 3 from the
+distribution, non-root user `edge`) built in 10 steps. The container reports **Up (healthy)** — its
+own `HEALTHCHECK` polls `/api/status` — and port 8000 is published.
+
+```bash
+docker build -f container/Dockerfile -t songdo-edge .
+docker run -d --name edge -p 8000:8000 songdo-edge
+docker ps
+```
+![Docker build and healthy container](docs/images/18_docker_build_healthy.png)
+
+`docker stats`: the containerised node uses ~93 MiB of memory and ~1 % CPU with 9 processes. The plain
+`docker run` above has no memory cap (the limit column shows the VM's 2.5 GiB); the 1 CPU / 512 MB
+cgroup limits are applied by `docker compose -f container/compose.yaml up`.
+
+![docker stats](docs/images/19_docker_stats.png)
+
+The dashboard served from inside the container (`http://127.0.0.1:8000`, generic node
+`config/node.yaml`). The supervisor is **PID 1** of the container's own PID namespace; its workers are PIDs 8–12.
+
+![Dashboard from the container](docs/images/20_docker_dashboard.png)
 
 ---
 
@@ -376,7 +429,7 @@ vmstat 1 5                                                  # context switches, 
 | Multi-process roles (Sensor, Processor, Health, UI), bounded queues, sockets, zombie-free shutdown | `src/edge/supervisor.py`, `workers.py`, `ipc.py`; OS2-1, OS2-4 | Results §6 (6 processes), §3 |
 | Race condition vs. Mutex, deadlock prevention, WAL durability, backup | `tests/test_os_fundamentals.py`; OS1-2, OS5-3, OS4-4 | Results §2 |
 | Bash ladder, rule engine, monotonic command TTL | `scripts/*.sh`, `src/edge/decision.py`; OS1-3, OS2-3, OS4-3, OS5-4 | Results §1, §3 |
-| systemd unit with burst limits + resource limits, flocked backups, container healthcheck | `systemd/`, `scripts/backup.sh`, `container/` | see Known gaps |
+| systemd unit with burst limits + resource limits, flocked backups, container healthcheck | `systemd/`, `scripts/backup.sh`, `container/` | Results §7 |
 | 10-minute WAN disconnect, event conservation, idempotent receiver dedup | OS1-5 (`--outage 600`), OS2-5 (`--offline 600`), OS3-5 (`--duration 600`), OS5-5 (`--cut 600`), OS4-5; `integration/` | Results §5 |
 | Zero-dependency dashboard with PIDs, CPU/RAM, outbox | `src/ui/static/index.html`, `src/edge/api_server.py` | Results §6 |
 | Grounded data with honest labels | `sources/source_registry.csv` | — |
@@ -388,8 +441,7 @@ vmstat 1 5                                                  # context switches, 
 - **Test platform:** the screenshots come from Ubuntu 26.04 / Python 3.14. On the handbook's Ubuntu 24.04 the five OS2 scenarios were run with Python 3.12 and the full suite with Python 3.13; there are no screenshots of those runs.
 - **OS2-5 timing (fixed):** before the storage fix (PR #8: one cached SQLite connection per thread instead of a new one per write) the "longest gap between ticks < 300 ms" check failed on busy team machines (312–404 ms). After the fix: 137 ms on the test machine and **89 ms** on the team machine (Results §5).
 - **ResourceWarning:** the unit tests print harmless `unclosed database` warnings on Python 3.14 (Results §2).
-- **Container:** the Dockerfile and compose file have not been built on a team machine yet (only the node's container settings and the healthcheck command were tested).
-- **systemd:** the unit's start command was tested; the unit itself has not yet been run under a real `systemctl --user`.
+- **Container:** the image was built and run healthy with `docker run`; the `docker compose` variant (with the 1 CPU / 512 MB limits) was not run separately.
 - The scenarios are separate programs; `start_demo.sh <theme>` runs the shared node, not the scenarios.
 - **OS3:** the scripts `build_bus_stops.py` and `os3_live_demo.py` mentioned by the OS3 team are not in the repo.
 
