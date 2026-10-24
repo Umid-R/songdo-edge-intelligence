@@ -8,7 +8,7 @@ Concept : Two workers need two locks. Worker 0 takes L1 then L2, worker 1 takes 
             timeout  : acquire(timeout=0.2) + release the first lock + back off + retry -> recovers
             ordered  : both take L1 then L2 (global lock ordering) -> deadlock cannot happen
 
-Owner   : Teshaboev Umidillo
+Owner   : Umidillo
 Test    : tests/os5/test_s3_deadlock_timeout.py
 Run     : PYTHONPATH=src python -m edge.teams.os5_reliable.s3_deadlock_timeout
 

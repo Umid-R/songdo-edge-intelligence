@@ -5,7 +5,7 @@ Action  : dispatch BACKUP_SLUICE_GATE_OPEN (rule and TTL come from config/os5.ya
 Concept : Strict threshold (> 2.8 m, so exactly 2.8 does NOT open), command TTL on the MONOTONIC
           clock (a stale open command is rejected), and hysteresis so the gate does not chatter.
 
-Owner   : Teshaboev Umidillo
+Owner   : Umidillo
 Test    : tests/os5/test_s4_sluice_gate.py
 Run     : PYTHONPATH=src python -m edge.teams.os5_reliable.s4_sluice_gate
 
