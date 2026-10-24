@@ -2,6 +2,7 @@
 import json
 import os
 import sqlite3
+import threading
 import time
 from contextlib import contextmanager
 
@@ -10,11 +11,41 @@ class Storage:
     def __init__(self, db_path, schema_path, init=True):
         self.db_path = db_path
         self.schema_path = schema_path
+        self._local = threading.local()          # one cached connection per thread (see _conn)
         os.makedirs(os.path.dirname(db_path), exist_ok=True)
         if init:
             self.init_schema()
 
-    # ---- connection helpers (one short-lived connection per call = thread/process safe) ----
+    # ---- connection helpers ----
+    # _connect() opens a NEW connection (the caller closes it). tx() and _read() reuse one cached
+    # connection per thread and per process instead: opening and closing a connection for every
+    # write costs about 2 ms and, when the last connection to a WAL database closes, SQLite runs
+    # a checkpoint inside close(), which stalled the 50 ms control loops by up to ~70 ms per write.
+    # Cached per thread (sqlite3 connections must not cross threads) and per PID (a forked child
+    # must never reuse its parent's connection).
+    def _conn(self):
+        loc = self._local
+        if getattr(loc, "pid", None) != os.getpid() or getattr(loc, "conn", None) is None:
+            loc.conn = self._connect()
+            loc.pid = os.getpid()
+        return loc.conn
+
+    def __getstate__(self):                      # picklable for multiprocessing: never ship a connection
+        state = self.__dict__.copy()
+        state.pop("_local", None)
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        self._local = threading.local()
+
+    def close(self):
+        """Close this thread's cached connection (optional; it also closes when the object is freed)."""
+        conn = getattr(self._local, "conn", None)
+        if conn is not None and getattr(self._local, "pid", None) == os.getpid():
+            conn.close()
+        self._local.conn = None
+
     def _connect(self):
         conn = sqlite3.connect(self.db_path, timeout=5.0, isolation_level=None)
         conn.row_factory = sqlite3.Row
@@ -27,9 +58,9 @@ class Storage:
     @contextmanager
     def tx(self):
         """All-or-nothing transaction."""
-        conn = self._connect()
+        conn = self._conn()
+        conn.execute("BEGIN IMMEDIATE")
         try:
-            conn.execute("BEGIN IMMEDIATE")
             yield conn
             conn.execute("COMMIT")
         except BaseException:
@@ -38,15 +69,9 @@ class Storage:
             except sqlite3.Error:
                 pass
             raise
-        finally:
-            conn.close()
 
     def _read(self, sql, params=()):
-        conn = self._connect()
-        try:
-            return [dict(r) for r in conn.execute(sql, params).fetchall()]
-        finally:
-            conn.close()
+        return [dict(r) for r in self._conn().execute(sql, params).fetchall()]
 
     def init_schema(self):
         with open(self.schema_path, encoding="utf-8") as f:
