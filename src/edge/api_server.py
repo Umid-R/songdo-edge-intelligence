@@ -7,7 +7,7 @@ import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from edge.core.storage import Storage
+from edge.storage import Storage
 
 
 def make_handler(cfg, storage):

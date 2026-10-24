@@ -9,8 +9,8 @@ import threading
 import time
 from pathlib import Path
 
-from edge.core.models import ProcessHealth
-from edge.core.storage import Storage
+from edge.models import ProcessHealth
+from edge.storage import Storage
 
 ROOT = Path(__file__).resolve().parents[4]
 SCHEMA = ROOT / "sql" / "schema.sql"
@@ -32,7 +32,7 @@ class PlatformProcSampler:
 
             self.psutil = psutil
         else:
-            from edge.core.procfs import ProcSampler
+            from edge.procfs import ProcSampler
             self.linux_sampler = ProcSampler()
             
 

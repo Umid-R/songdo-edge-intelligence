@@ -19,7 +19,7 @@ import sys
 import tempfile
 import time
 
-from edge.core.storage import Storage
+from edge.storage import Storage
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
     os.path.abspath(__file__))))))

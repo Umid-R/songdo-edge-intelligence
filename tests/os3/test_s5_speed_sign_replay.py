@@ -15,7 +15,7 @@ class TestS5SpeedSignReplay(unittest.TestCase):
         self.assertTrue(ok, "\n".join(lines))
 
     def test_sign_reverts_after_ttl(self):
-        from edge.core.models import EdgeDecision
+        from edge.models import EdgeDecision
         import time
         sign = m.SpeedSign()
         now = time.monotonic()

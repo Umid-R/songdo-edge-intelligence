@@ -13,9 +13,9 @@ import time
 from collections import deque
 
 from edge.api_server import api_main
-from edge.core.config import load_config
-from edge.core.ipc import STOP, BoundedQueue, StopFlag
-from edge.core.storage import Storage
+from edge.config import load_config
+from edge.ipc import STOP, BoundedQueue, StopFlag
+from edge.storage import Storage
 from edge.sync_worker import sync_main
 from edge.workers import health_main, processor_main, sensor_gen_main
 

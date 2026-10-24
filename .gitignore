@@ -10,3 +10,7 @@ data/run/*
 !data/run/.gitkeep
 .idea/
 .vscode/
+
+# instructor material: keep out of the public repo (copy locally / into the submission ZIP)
+Songdo_Edge_Intelligence_Handbook.pdf
+results/

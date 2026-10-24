@@ -21,8 +21,8 @@ import sys
 import tempfile
 from collections import defaultdict
 
-from edge.core.models import SensorEvent
-from edge.core.storage import Storage
+from edge.models import SensorEvent
+from edge.storage import Storage
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
 BASE = 1_700_000_000.0               # simulated epoch start

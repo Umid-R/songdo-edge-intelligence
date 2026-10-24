@@ -1,19 +1,29 @@
-# TEMPLATE (Ops owner: verify on Ubuntu).  Install:
+# systemd user service, one instance per theme (%i = OS1 ... OS5, or "node" for config/node.yaml).
+# Install:
 #   mkdir -p ~/.config/systemd/user && cp systemd/songdo-edge@.service ~/.config/systemd/user/
 #   systemctl --user daemon-reload && systemctl --user start songdo-edge@OS1.service
+#   systemctl --user status songdo-edge@OS1.service
+#   journalctl --user-unit songdo-edge@OS1.service -f -o short-iso
+# Assumes the repo is cloned to ~/songdo-edge-intelligence and scripts/setup.sh has been run.
 [Unit]
 Description=Songdo Edge node %i
+# burst limit: at most 5 starts in 60 s, then systemd gives up (no endless crash loop)
 StartLimitIntervalSec=60
 StartLimitBurst=5
 
 [Service]
 Type=simple
 WorkingDirectory=%h/songdo-edge-intelligence
-Environment=PYTHONPATH=src
-ExecStart=%h/songdo-edge-intelligence/.venv/bin/python -m edge.supervisor --config config/node.yaml
+# start_demo.sh maps OS1 -> config/os1.yaml and exec's the supervisor (systemd tracks its PID)
+ExecStart=/bin/bash %h/songdo-edge-intelligence/scripts/start_demo.sh %i
 Restart=on-failure
 RestartSec=2
+# resource constraints (cgroup): memory cap, half a CPU, bounded number of tasks
 MemoryMax=512M
+CPUQuota=50%
+TasksMax=64
+KillSignal=SIGTERM
+TimeoutStopSec=10
 
 [Install]
 WantedBy=default.target

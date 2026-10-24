@@ -3,7 +3,7 @@ import logging
 import operator
 import time
 
-from edge.core.models import EdgeDecision
+from edge.models import EdgeDecision
 
 log = logging.getLogger("edge.decision")
 

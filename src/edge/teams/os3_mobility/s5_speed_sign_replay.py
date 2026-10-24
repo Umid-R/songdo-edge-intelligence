@@ -23,9 +23,9 @@ import sys
 import tempfile
 import time
 
-from edge.core.config import load_config
-from edge.core.models import EdgeDecision, SensorEvent
-from edge.core.storage import Storage
+from edge.config import load_config
+from edge.models import EdgeDecision, SensorEvent
+from edge.storage import Storage
 from edge.decision import RuleEngine, dispatch
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(

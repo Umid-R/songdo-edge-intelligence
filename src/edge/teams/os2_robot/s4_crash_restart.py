@@ -30,7 +30,7 @@ import sys
 import tempfile
 import time
 
-from edge.core.storage import Storage
+from edge.storage import Storage
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
 STATE_KEY = "os2_motion_state"

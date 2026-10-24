@@ -9,9 +9,9 @@ import unittest
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "src"))
 
-from edge.core.ipc import BoundedQueue, StopFlag, UnixSocketServer, unix_request   # noqa: E402
-from edge.core.models import EdgeDecision, SensorEvent                    # noqa: E402
-from edge.core.storage import Storage                                     # noqa: E402
+from edge.ipc import BoundedQueue, StopFlag, UnixSocketServer, unix_request   # noqa: E402
+from edge.models import EdgeDecision, SensorEvent                    # noqa: E402
+from edge.storage import Storage                                     # noqa: E402
 from edge.decision import RuleEngine, dispatch                            # noqa: E402
 
 SCHEMA = os.path.join(ROOT, "sql", "schema.sql")

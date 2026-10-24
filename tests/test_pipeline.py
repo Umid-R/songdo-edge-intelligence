@@ -13,7 +13,7 @@ import yaml
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "src"))
-from edge.core.storage import Storage   # noqa: E402
+from edge.storage import Storage   # noqa: E402
 
 
 def free_port():

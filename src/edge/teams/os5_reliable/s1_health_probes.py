@@ -27,10 +27,10 @@ import sys
 import tempfile
 import time
 
-from edge.core.ipc import StopFlag
-from edge.core.models import ProcessHealth
-from edge.core.procfs import read_proc
-from edge.core.storage import Storage
+from edge.ipc import StopFlag
+from edge.models import ProcessHealth
+from edge.procfs import read_proc
+from edge.storage import Storage
 from edge.teams.os5_reliable._common import ROOT, wait_until
 
 NAME = "os5-sensor-worker"

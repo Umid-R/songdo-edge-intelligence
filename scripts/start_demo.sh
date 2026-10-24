@@ -8,6 +8,8 @@ CONFIG=config/node.yaml
 if [[ "${1:-}" =~ ^[Oo][Ss][1-5]$ ]]; then
   CONFIG="config/$(echo "$1" | tr 'A-Z' 'a-z').yaml"
   shift
+elif [[ "${1:-}" == "node" ]]; then
+  shift                                   # songdo-edge@node.service -> config/node.yaml
 fi
 PORT=$(awk '/api_port:/ {print $2}' "$CONFIG")
 PY=python3

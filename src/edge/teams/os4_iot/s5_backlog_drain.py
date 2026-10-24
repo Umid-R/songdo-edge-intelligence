@@ -27,9 +27,9 @@ import sys
 import tempfile
 import time
 
-from edge.core.config import load_config
-from edge.core.models import SensorEvent
-from edge.core.storage import Storage
+from edge.config import load_config
+from edge.models import SensorEvent
+from edge.storage import Storage
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
 BASELINE_FILE = os.path.join(ROOT, "data", "airkorea_131233_pm25.csv")

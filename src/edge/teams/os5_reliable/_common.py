@@ -24,8 +24,8 @@ import threading
 import time
 from collections import deque
 
-from edge.core.models import SensorEvent
-from edge.core.storage import Storage
+from edge.models import SensorEvent
+from edge.storage import Storage
 from edge.decision import RuleEngine, dispatch
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))

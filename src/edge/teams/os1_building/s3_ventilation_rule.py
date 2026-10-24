@@ -9,8 +9,8 @@ import tempfile
 import time
 from pathlib import Path
 
-from edge.core.models import EdgeDecision, SensorEvent
-from edge.core.storage import Storage
+from edge.models import EdgeDecision, SensorEvent
+from edge.storage import Storage
 
 ROOT = Path(__file__).resolve().parents[4]
 SCHEMA = ROOT / "sql" / "schema.sql"
