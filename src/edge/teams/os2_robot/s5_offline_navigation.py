@@ -153,9 +153,6 @@ def run(online_s=3.0, offline_s=10.0, restored_s=5.0, track=None):
 
                 d, obs_id, obs_type = trace[i % len(trace)]
                 lat, lon, heading = path.pose(travelled)
-                ev = SensorEvent(node_id=node, sensor="LIDAR_PROXIMITY_M", value=d, unit="m")
-                ev.received_at = time.time()
-                st.insert_event_with_outbox(ev)           # durable first, network never involved
                 blocked = d < STOP_BELOW_M
                 p = per[name]
                 p["ticks"] += 1
@@ -164,8 +161,11 @@ def run(online_s=3.0, offline_s=10.0, restored_s=5.0, track=None):
                     in_episode = True
                 elif in_episode and d >= CLEAR_ABOVE_M:
                     in_episode = False
-                if latch.on_proximity(d):
+                if latch.on_proximity(d):                 # SAFETY FIRST: latch before any disk write
                     p["engaged"] += 1
+                ev = SensorEvent(node_id=node, sensor="LIDAR_PROXIMITY_M", value=d, unit="m")
+                ev.received_at = time.time()
+                st.insert_event_with_outbox(ev)           # then log durably; the network is never involved
                 for dec in engine.evaluate(ev, now):
                     st.insert_decision(dec)
                     st.set_decision_status(dec.decision_id, latch.submit(dec, now))
@@ -233,7 +233,7 @@ def run(online_s=3.0, offline_s=10.0, restored_s=5.0, track=None):
         f"{sum(1 for o in must_stop if o[2])}": all(o[2] for o in must_stop) and len(must_stop) > 0,
         f"{len(must_pass)} cyclists passed at >= 0.8 m: no false e-stop for "
         f"{sum(1 for o in must_pass if not o[2])}": not any(o[2] for o in must_pass),
-        f"{cut['ticks']} ticks ran during the WAN cut, longest gap between ticks {max_gap_ms:.0f} ms "
+        f"{cut['ticks']} ticks ran during the WAN cut; longest gap between ticks over the whole run {max_gap_ms:.0f} ms "
         f"(limit {PERIOD_S * 6000:.0f} ms)": cut["ticks"] == phases[1][1] and max_gap_ms < PERIOD_S * 6000,
         "obstacle avoidance identical in every phase (every obstacle latched, robot never moved blocked): "
         + ", ".join(f"{n}: {v['engaged']}/{v['episodes']}" for n, v in per.items()):

@@ -161,7 +161,7 @@ Each scenario also runs alone: `PYTHONPATH=src python3 -m edge.teams.<theme_fold
 
 ## Known gaps (be honest about them in the defense)
 - Data: OS1-1 uses SAMPLE VWorld footprints, OS2-5 an APPROXIMATE Central Park path and a SIMULATED LiDAR trace, OS4-5 a SIMULATED AirKorea baseline, OS5-4 SIMULATED water levels. Details in `sources/source_registry.csv`.
-- OS2-5 10-minute run: every obstacle stopped and every event delivered in all runs; the "longest gap between ticks < 300 ms" check passed on two machines (200 and 255 ms) and failed on a busy laptop (327 and 404 ms).
+- OS2-5 10-minute run: every obstacle stopped and every event delivered in all runs. Before the storage fix (one cached SQLite connection per thread) the "longest gap between ticks < 300 ms" check was borderline (200–404 ms); after it, 137 ms on the same test machine. Re-check on your own machine before the demo.
 - Container: the Dockerfile and compose file have not been built on a team machine yet (only the node's container settings and the healthcheck command were tested).
 - systemd: the unit's start command was tested; the unit itself has not yet been run under a real `systemctl --user`.
 - The scenarios are separate programs; `start_demo.sh <theme>` runs the shared node, not the scenarios.
