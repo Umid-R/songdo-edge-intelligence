@@ -7,7 +7,7 @@ Concept : Local control never waits for the network. The navigation loop (50 ms,
           outbox, but only while the WAN flag says "online". Zero loss is checked by event
           conservation: events stored == events delivered, no duplicates.
 
-Owner   : (write names here)
+Owner   : Umid, Umrbek
 Test    : tests/os2/test_s5_offline_navigation.py
 Run     : PYTHONPATH=src python -m edge.teams.os2_robot.s5_offline_navigation [--offline 600]
           (--offline is the outage length in seconds. Default 10; use 600 for the 10-minute

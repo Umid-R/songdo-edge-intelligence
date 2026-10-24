@@ -6,7 +6,7 @@ Concept : Disposable worker + durable state. The worker keeps nothing that matte
           input is a durable SQLite inbox and every row is handled in ONE transaction (see _common.py).
           The supervisor traps SIGCHLD, reaps the dead child with wait() (no zombie), and restarts it.
 
-Owner   : (write names here)
+Owner   : Teshaboev Umidillo
 Test    : tests/os5/test_s2_worker_kill_recovery.py
 Run     : PYTHONPATH=src python -m edge.teams.os5_reliable.s2_worker_kill_recovery
 

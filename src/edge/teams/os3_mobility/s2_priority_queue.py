@@ -3,7 +3,7 @@
 Mission : Prioritize pedestrian surge alarms over background sensor logging.
 Concept : Bounded queue prevents buffer bloat and guarantees low-latency processing.
 
-Owner   : (write names here)
+Owner   : Arlen, Onill
 Test    : tests/os3/test_s2_priority_queue.py
 Run     : PYTHONPATH=src python -m edge.teams.os3_mobility.s2_priority_queue
 

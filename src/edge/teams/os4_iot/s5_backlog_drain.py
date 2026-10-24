@@ -9,7 +9,7 @@ Concept : 6 simulated hours (1 reading per minute): hours 0-1 online, the WAN is
           to prove it, the first batch is delivered but the node "crashes" before recording the ack, so
           the same batch is sent again; the platform answers ACK_DUPLICATE and keeps exactly one copy.
 
-Owner   : (write names here)
+Owner   : Nazarbek
 Test    : tests/os4/test_s5_backlog_drain.py
 Run     : PYTHONPATH=src python -m edge.teams.os4_iot.s5_backlog_drain
 

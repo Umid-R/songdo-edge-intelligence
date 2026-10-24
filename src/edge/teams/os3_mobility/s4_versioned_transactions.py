@@ -6,7 +6,7 @@ Concept : A blind read-modify-write loses updates. A version column plus compare
           (UPDATE ... WHERE version = <what I read>) inside a transaction makes the loser
           notice and retry.
 
-Owner   : (write names here)
+Owner   : Arlen, Onill
 Test    : tests/os3/test_s4_versioned_transactions.py
 Run     : PYTHONPATH=src python -m edge.teams.os3_mobility.s4_versioned_transactions
 

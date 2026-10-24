@@ -6,7 +6,7 @@ Concept : Local decisions never wait for the network. The command carries a mono
           TTL, so a stale command is never executed late. Replay is safe because the upstream
           deduplicates on event_id.
 
-Owner   : (write names here)
+Owner   : Arlen, Onill
 Test    : tests/os3/test_s5_speed_sign_replay.py
 Run     : PYTHONPATH=src python -m edge.teams.os3_mobility.s5_speed_sign_replay [--duration 600]
           (--duration is the length of the WAN outage in seconds; default 3, use 600 for the

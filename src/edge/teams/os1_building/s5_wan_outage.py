@@ -1,5 +1,7 @@
 """OS1-5: Signature WAN Outage & Offline Outbox Queueing.
 
+Owner   : Aidar, Arkar
+
 Simulates a WAN outage without changing the real network interface. Sensor events
 are atomically stored with outbox entries while WAN is down; after restoring the
 mock WAN, the worker drains batches to the idempotent upstream sink.

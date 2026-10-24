@@ -8,7 +8,7 @@ Concept : Strict threshold (50.0 does NOT trigger, 50.1 does) and a command TTL 
           last accepted command expires, so if the node dies or the air clears, the cannon switches itself
           off (fail-safe) and keeps running only while fresh commands keep arriving.
 
-Owner   : (write names here)
+Owner   : Nazarbek
 Test    : tests/os4/test_s3_mist_cannon.py
 Run     : PYTHONPATH=src python -m edge.teams.os4_iot.s3_mist_cannon
 
