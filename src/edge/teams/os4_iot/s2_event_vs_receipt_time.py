@@ -8,7 +8,7 @@ Concept : Every reading carries TWO timestamps: observed_at (when the sensor mea
           "closed", and readings that arrive after that are LATE: they are still stored and they CORRECT
           the already-emitted window.
 
-Owner   : (write names here)
+Owner   : Nazarbek
 Test    : tests/os4/test_s2_event_vs_receipt_time.py
 Run     : PYTHONPATH=src python -m edge.teams.os4_iot.s2_event_vs_receipt_time
 

@@ -1,5 +1,7 @@
 """OS1-2: Competing Occupancy Writers & Race Condition Demonstration.
 
+Owner   : Aidar, Arkar
+
 Two demonstrations of the same lost-update bug (counter = counter + 1 is LOAD, ADD, STORE):
 
 1. Threads, deterministic: the unsafe version deliberately makes all 80 workers read the same old

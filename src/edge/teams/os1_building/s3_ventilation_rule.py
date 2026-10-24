@@ -1,5 +1,7 @@
 """OS1-3: Local Ventilation Rule & Damper Actuator Dispatch.
 
+Owner   : Aidar, Arkar
+
 Rule: CO2 > 1000 ppm -> HVAC_DAMPER_PCT = 100, command TTL = 15 seconds.
 Use time.monotonic() for expiry because wall-clock time can jump.
 """

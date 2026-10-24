@@ -8,7 +8,7 @@ Concept : Jitter J[n] = |dt[n] - T| with T = 50 ms and dt[n] = t[n] - t[n-1], wh
             naive     : work(); sleep(T)           -> period = T + work time, drift grows forever
             absolute  : sleep until next_deadline; next_deadline += T   -> no cumulative drift
 
-Owner   : (write names here)
+Owner   : Umid, Umrbek
 Test    : tests/os2/test_s2_jitter.py
 Run     : PYTHONPATH=src python -m edge.teams.os2_robot.s2_jitter [--ticks 100]
 

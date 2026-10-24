@@ -7,7 +7,7 @@ Concept : Polling and NON-BLOCKING I/O across diverse sensor channels. Each sens
           descriptors, and reassembles frames that arrive in partial pieces (FrameBuffer). A slow
           sensor can never stall a fast one, and no thread per sensor is needed.
 
-Owner   : (write names here)
+Owner   : Nazarbek
 Test    : tests/os4/test_s1_multistream_ingestion.py
 Run     : PYTHONPATH=src python -m edge.teams.os4_iot.s1_multistream_ingestion
 

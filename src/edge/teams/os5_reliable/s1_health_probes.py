@@ -12,7 +12,7 @@ State machine (reported by the worker):  STARTING --5 beats--> READY <--> NOT_RE
 Probe verdicts (computed by the prober): STARTING, READY, NOT_READY, HUNG (stale heartbeat),
                                          DEAD (pid gone), NO_HEARTBEAT (never reported)
 
-Owner   : (write names here)
+Owner   : Teshaboev Umidillo
 Test    : tests/os5/test_s1_health_probes.py
 Run     : PYTHONPATH=src python -m edge.teams.os5_reliable.s1_health_probes
 

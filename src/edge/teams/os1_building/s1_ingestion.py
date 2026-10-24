@@ -1,5 +1,7 @@
 """OS1-1: Local Room Sensor Ingestion & Cached Inventory.
 
+Owner   : Aidar, Arkar
+
 Reads indoor CO2 / temperature readings from several rooms, loads a cached VWorld building
 GeoJSON, and for every reading records WHICH BUILDING its room is in (point-in-polygon against the
 cached geometry). The readings themselves use the shared atomic event+outbox API; the building

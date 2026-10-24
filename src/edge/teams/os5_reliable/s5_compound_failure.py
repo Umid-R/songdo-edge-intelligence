@@ -12,7 +12,7 @@ Concept : Combines OS5-2 (durable inbox + disposable worker + supervisor) with t
           Verified: produced == stored == delivered, no duplicates, gate opened within the recovery
           bound, nothing delivered while the WAN was cut, gate closed again after the flood.
 
-Owner   : (write names here)
+Owner   : Teshaboev Umidillo
 Test    : tests/os5/test_s5_compound_failure.py
 Run     : PYTHONPATH=src python -m edge.teams.os5_reliable.s5_compound_failure [--cut 3]
 Readings are SIMULATED (see _common.flood_level); the WAN is a flag in the database, not a real network.

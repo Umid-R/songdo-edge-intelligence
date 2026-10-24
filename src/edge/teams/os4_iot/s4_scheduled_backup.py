@@ -5,7 +5,7 @@ Concept : SQLite ONLINE backup API: a consistent snapshot while writers keep wri
           PRAGMA integrity_check on the copy, then retention (keep the newest N). flock -n makes a second
           run that overlaps the first one exit immediately instead of piling up ("zero corrupt locks").
 
-Owner   : (write names here)
+Owner   : Nazarbek
 Test    : tests/os4/test_s4_scheduled_backup.py
 Run     : PYTHONPATH=src python -m edge.teams.os4_iot.s4_scheduled_backup        (the scenario)
           bash scripts/backup.sh config/os4.yaml                                  (one real backup)

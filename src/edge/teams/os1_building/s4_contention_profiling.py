@@ -1,5 +1,8 @@
 
-"""OS1-4: Contention Profiling & Resource Sampling."""
+"""OS1-4: Contention Profiling & Resource Sampling.
+
+Owner   : Aidar, Arkar
+"""
 
 import os
 import platform

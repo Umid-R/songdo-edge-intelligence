@@ -8,7 +8,7 @@ Concept : Process isolation + two IPC mechanisms:
           The SafetyMonitor is a separate process so that a bug in the Controller cannot
           disable it: it independently refuses any MOVE command while an obstacle is < 0.8 m.
 
-Owner   : (write names here)
+Owner   : Umid, Umrbek
 Test    : tests/os2/test_s1_robot_ipc_topology.py
 Run     : PYTHONPATH=src python -m edge.teams.os2_robot.s1_robot_ipc_topology
 Inspect : while it runs, `pstree -p -a <parent pid>` and `ss -xlp` show the same topology.

@@ -4,7 +4,7 @@ Mission : Flood the node faster than it can process and prove that memory stays 
 Concept : A bounded queue with drop_oldest keeps the freshest data and never blocks the
           producer; an unbounded queue would grow RSS until the OOM killer steps in.
 
-Owner   : (write names here)
+Owner   : Arlen, Onill
 Test    : tests/os3/test_s3_overload_drop.py
 Run     : PYTHONPATH=src python -m edge.teams.os3_mobility.s3_overload_drop
 

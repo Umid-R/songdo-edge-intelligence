@@ -8,7 +8,7 @@ Concept : The supervisor TRAPS SIGCHLD (the kernel's "a child changed state" sig
           wait() (no zombie) and spawns a replacement. State survives because the worker
           writes its progress to SQLite (WAL) on every tick, and a fresh worker reads it back.
 
-Owner   : (write names here)
+Owner   : Umid, Umrbek
 Test    : tests/os2/test_s4_crash_restart.py
 Run     : PYTHONPATH=src python -m edge.teams.os2_robot.s4_crash_restart
 

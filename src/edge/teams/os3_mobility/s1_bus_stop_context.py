@@ -5,7 +5,7 @@ Mission : Load the real bus stop and route context around the Techno-Park inters
 Concept : Context data is read-only reference data; the live stream goes through the
           shared atomic "event + outbox" write, so nothing is lost if the WAN is down.
 
-Owner   : (write names here)
+Owner   : Arlen, Onill
 Test    : tests/os3/test_s1_bus_stop_context.py
 Run     : PYTHONPATH=src python -m edge.teams.os3_mobility.s1_bus_stop_context
 

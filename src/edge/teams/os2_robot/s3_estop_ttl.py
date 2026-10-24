@@ -5,7 +5,7 @@ Concept : Every actuator command carries a validity window (TTL = 500 ms) measur
           MONOTONIC clock. The safety latch rejects any command that is older than that, and
           it also rejects motion commands while the e-stop is latched.
 
-Owner   : (write names here)
+Owner   : Umid, Umrbek
 Test    : tests/os2/test_s3_estop_ttl.py
 Run     : PYTHONPATH=src python -m edge.teams.os2_robot.s3_estop_ttl
 
