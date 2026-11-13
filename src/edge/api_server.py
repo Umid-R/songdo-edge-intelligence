@@ -8,10 +8,46 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from edge.storage import Storage
+from edge.upstream import fetch_stats, reconcile, upstream_settings
+
+
+def node_status(cfg, storage):
+    """Live node status. Delivery numbers come from the independent receiver when there is one."""
+    up = upstream_settings(cfg)
+    counts = storage.counts()
+    pending = storage.outbox_pending()
+    receiver = {"url": up[3] if up else None, "reachable": None}
+    if up:
+        try:
+            st = fetch_stats(up[3], timeout=0.5)
+            receiver.update(reachable=True, **st)
+            counts["sink"] = st["received"]
+        except OSError:
+            receiver["reachable"] = False
+        delivered = counts["sink"] if receiver["reachable"] else None
+        # count form of the ID check in /api/reconcile: the receiver holds no more than the node
+        # committed, and everything committed is either at the receiver or still pending
+        conserved = (delivered is not None and delivered <= counts["events"]
+                     and counts["events"] - pending <= delivered)
+        conservation = {"events": counts["events"], "sink": delivered, "pending": pending,
+                        "conserved": conserved}
+    else:
+        conservation = storage.conservation_report()
+    try:
+        queue = json.loads(storage.kv_get("queue_stats", "{}"))
+        sync = json.loads(storage.kv_get("sync_stats", "{}"))
+    except ValueError:
+        queue, sync = {}, {}
+    return {"node": cfg["node"]["id"], "ts": time.time(), "wan_online": storage.wan_online(),
+            "outbox_pending": pending, "counts": counts, "conservation": conservation,
+            "receiver": receiver, "queue": queue, "sync": sync,
+            "actuators": storage.actuator_states(), "recovery": storage.recovery_report(),
+            "processes": storage.list_health()}
 
 
 def make_handler(cfg, storage):
     index_path = os.path.join(cfg["paths"]["static"], "index.html")
+    up = upstream_settings(cfg)
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *args):   # keep the console quiet
@@ -27,13 +63,9 @@ def make_handler(cfg, storage):
 
         def do_GET(self):
             if self.path == "/api/status":
-                self._send(200, {
-                    "node": cfg["node"]["id"], "ts": time.time(),
-                    "wan_online": storage.wan_online(),
-                    "outbox_pending": storage.outbox_pending(),
-                    "counts": storage.counts(),
-                    "conservation": storage.conservation_report(),
-                    "processes": storage.list_health()})
+                self._send(200, node_status(cfg, storage))
+            elif self.path == "/api/reconcile":
+                self._send(200, reconcile(storage, up[3] if up else None))
             elif self.path in ("/", "/index.html"):
                 with open(index_path, "rb") as f:
                     self._send(200, f.read(), "text/html; charset=utf-8")
