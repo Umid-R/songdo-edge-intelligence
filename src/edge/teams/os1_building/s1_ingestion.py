@@ -139,7 +139,7 @@ def run(ticks=20, seed=7, db_path=None, inventory_path=None):
     rng = random.Random(seed)
     base = time.time()
     room_building = {room: locate_building(lon, lat, features) for room, lon, lat in ROOMS}
-    temp_dir = tempfile.TemporaryDirectory() if db_path is None else None
+    temp_dir = tempfile.TemporaryDirectory(ignore_cleanup_errors=True) if db_path is None else None
     try:
         db_file = db_path or os.path.join(temp_dir.name, "os1_s1.db")
         db = Storage(db_file, str(SCHEMA))

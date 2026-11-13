@@ -7,8 +7,11 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 sys.path.insert(0, os.path.join(ROOT, "src"))
 
 from edge.teams.os5_reliable import s1_health_probes as m   # noqa: E402
+sys.path.insert(0, os.path.join(ROOT, "tests"))
+from platform_skip import linux_only   # noqa: E402
 
 
+@linux_only("SIGKILL and /proc")
 class TestS1HealthProbes(unittest.TestCase):
     def row(self, state="READY", updated_at=100.0):
         return {"pid": 1, "state": state, "updated_at": updated_at}

@@ -95,7 +95,7 @@ def run(samples=3, interval_s=2.0, db_path=None, pid=None):
     if samples < 1 or interval_s < 0:
         raise ValueError("samples must be >= 1 and interval_s must be >= 0")
 
-    temp_dir = tempfile.TemporaryDirectory() if db_path is None else None
+    temp_dir = tempfile.TemporaryDirectory(ignore_cleanup_errors=True) if db_path is None else None
     stop = threading.Event()
 
     try:

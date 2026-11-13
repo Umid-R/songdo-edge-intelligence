@@ -138,7 +138,7 @@ def run(duration=3.0):
     got = fb.feed(frame[:5]) + fb.feed(frame[5:14]) + fb.feed(frame[14:] + b'{"sensor":"Y"')
     reassembled = got == [b'{"sensor":"X","value":1}'] and fb.feed(b',"value":2}\n') == [b'{"sensor":"Y","value":2}']
 
-    with tempfile.TemporaryDirectory() as tmp:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         st = Storage(os.path.join(tmp, "os4_ingest.db"), os.path.join(ROOT, "sql", "schema.sql"))
         stats, codes, nonblocking, polls = ingest(duration, st)
         rows = st._read("SELECT sensor,value,observed_at,received_at FROM sensor_events ORDER BY observed_at")

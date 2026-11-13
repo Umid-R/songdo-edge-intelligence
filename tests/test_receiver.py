@@ -44,7 +44,7 @@ def start_receiver(port, db):
 
 class TestReceiver(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory()
+        self.tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.st = Storage(os.path.join(self.tmp.name, "node.db"), os.path.join(ROOT, "sql", "schema.sql"))
         for i in range(N):                                   # admitted + committed, like the node does
             ev = SensorEvent(node_id="T", sensor="S", value=i, event_id=f"e{i:04d}")

@@ -16,7 +16,7 @@ HOLE = [[4, 4], [6, 4], [6, 6], [4, 6], [4, 4]]
 
 class TestS1Ingestion(unittest.TestCase):
     def test_sensor_events_are_stored_with_outbox_and_mapped(self):
-        with tempfile.TemporaryDirectory() as tmp:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
             ok, lines = m.run(ticks=7, db_path=os.path.join(tmp, "test.db"))
             self.assertTrue(ok, "\n".join(lines))
             report = "\n".join(lines)
@@ -32,7 +32,7 @@ class TestS1Ingestion(unittest.TestCase):
             self.assertIn("NOT real VWorld data", lines[0])
 
     def test_missing_explicit_inventory_fails_loudly(self):
-        with tempfile.TemporaryDirectory() as tmp:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
             ok, lines = m.run(ticks=3, inventory_path=os.path.join(tmp, "missing.geojson"))
             self.assertFalse(ok)
             self.assertIn("NO INVENTORY", lines[0])
@@ -57,7 +57,7 @@ class TestS1Ingestion(unittest.TestCase):
             {"type": "Feature", "id": "B-12", "properties": {"room_id": "R-12"},
              "geometry": {"type": "Point", "coordinates": [126.6, 37.3]}}
         ]}
-        with tempfile.TemporaryDirectory() as tmp:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
             path = os.path.join(tmp, "cache.geojson")
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(doc, f)
@@ -66,7 +66,7 @@ class TestS1Ingestion(unittest.TestCase):
             self.assertEqual(m.match_building("R-12", features)["id"], "B-12")
 
     def test_invalid_geojson_is_rejected(self):
-        with tempfile.TemporaryDirectory() as tmp:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
             path = os.path.join(tmp, "bad.json")
             with open(path, "w", encoding="utf-8") as f:
                 json.dump({"type": "Feature", "features": []}, f)

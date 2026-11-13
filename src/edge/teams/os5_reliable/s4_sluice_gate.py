@@ -60,7 +60,7 @@ def run():
     def check(name, cond):
         checks.append((name, bool(cond)))
 
-    with tempfile.TemporaryDirectory() as tmp:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         st = Storage(os.path.join(tmp, "os5_sluice.db"), cfg["paths"]["schema"])
         gate = SluiceGate()
         states, statuses, latencies = [], [], []

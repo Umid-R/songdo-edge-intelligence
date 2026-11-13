@@ -65,7 +65,7 @@ def run_processor(cfg, items, env=None, timeout=20):
 
 class TestCrashRecovery(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory()
+        self.tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.cfg = make_cfg(self.tmp.name)
         self.st = Storage(self.cfg["paths"]["db"], self.cfg["paths"]["schema"])
         self.evs = events()
@@ -127,7 +127,7 @@ class TestCrashRecovery(unittest.TestCase):
 
 class TestIntentGuards(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory()
+        self.tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.st = Storage(os.path.join(self.tmp.name, "g.db"), os.path.join(ROOT, "sql", "schema.sql"))
         self.engine = RuleEngine([RULE], deterministic_ids=True)
 

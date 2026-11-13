@@ -81,7 +81,7 @@ def run():
     script = os.path.join(ROOT, "scripts", "backup.sh")
     env = dict(os.environ, PYTHONPATH=os.path.join(ROOT, "src"))
     checks = {}
-    with tempfile.TemporaryDirectory() as tmp:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         db, bdir, sdir = (os.path.join(tmp, n) for n in ("os4_backup.db", "backups", "script_backups"))
         st = Storage(db, schema)
         for _ in range(200):

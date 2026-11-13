@@ -91,7 +91,7 @@ class TestRegistry(unittest.TestCase):
 @unittest.skipUnless(os.name == "posix", "process-group checks are POSIX")
 class TestRunManager(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory()
+        self.tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.mgr = RunManager(ROOT, results_dir=os.path.join(self.tmp.name, "runs"),
                               registry=fake_registry(), extra_pythonpath=[FIX], python=sys.executable)
 
@@ -182,7 +182,7 @@ class TestConsoleApi(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.tmp = tempfile.TemporaryDirectory()
+        cls.tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         cfg = {"node": {"id": "TEST"}, "paths": {"db": os.path.join(cls.tmp.name, "n.db"),
                "schema": os.path.join(ROOT, "sql", "schema.sql"), "static": os.path.join(ROOT, "src", "ui", "static")}}
         cls.storage = Storage(cfg["paths"]["db"], cfg["paths"]["schema"])
@@ -250,7 +250,7 @@ class TestUiCliParity(unittest.TestCase):
     SUBSET = ["OS1-2", "OS2-3", "OS3-2", "OS4-2", "OS5-4"]
 
     def test_cli_and_api_agree(self):
-        with tempfile.TemporaryDirectory() as tmp:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
             cli = subprocess.run([sys.executable, os.path.join(ROOT, "scenarios", "run_all_scenarios.py"),
                                   "--results", os.path.join(tmp, "cli", "runs")] +
                                  sum((["--only", s] for s in self.SUBSET[:1]), []),

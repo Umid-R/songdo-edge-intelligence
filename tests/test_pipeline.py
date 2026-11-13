@@ -30,7 +30,7 @@ def call(port, path, method="GET"):
 
 class TestOfflineDemo(unittest.TestCase):
     def test_wan_cut_and_restore(self):
-        with tempfile.TemporaryDirectory() as tmp:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
             with open(os.path.join(ROOT, "config", "node.yaml"), encoding="utf-8") as f:
                 cfg = yaml.safe_load(f)
             port = free_port()

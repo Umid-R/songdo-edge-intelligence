@@ -121,7 +121,7 @@ def run(duration=2.0):
     stop, mon_stop = ctx.Event(), ctx.Event()
     info_q, res_q = ctx.Queue(), ctx.Queue()
 
-    with tempfile.TemporaryDirectory() as tmp:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         sock = os.path.join(tmp, "safety.sock")
         mon = ctx.Process(target=safety_monitor_main, args=(sock, mon_stop, info_q, res_q), name="SafetyMonitor")
         ctrl = ctx.Process(target=controller_main, args=(q, stop, sock, info_q, res_q), name="Controller")

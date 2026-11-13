@@ -7,12 +7,15 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 from edge.teams.os1_building import s4_contention_profiling as m  # noqa: E402
+sys.path.insert(0, os.path.join(ROOT, "tests"))
+from platform_skip import linux_only   # noqa: E402
 from edge.storage import Storage  # noqa: E402
 
 
+@linux_only("/proc/<pid>/stat sampling")
 class TestS4ContentionProfiling(unittest.TestCase):
     def test_samples_rss_and_context_switches(self):
-        with tempfile.TemporaryDirectory() as tmp:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
             db_path = os.path.join(tmp, "test.db")
             ok, lines = m.run(samples=3, interval_s=0.01, db_path=db_path, pid=os.getpid())
             self.assertTrue(ok, "\n".join(lines))

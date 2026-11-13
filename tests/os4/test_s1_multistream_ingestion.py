@@ -7,8 +7,11 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 sys.path.insert(0, os.path.join(ROOT, "src"))
 
 from edge.teams.os4_iot import s1_multistream_ingestion as m   # noqa: E402
+sys.path.insert(0, os.path.join(ROOT, "tests"))
+from platform_skip import linux_only   # noqa: E402
 
 
+@linux_only("selectors (epoll) on pipes")
 class TestS1MultiStreamIngestion(unittest.TestCase):
     def test_frame_buffer_handles_partial_reads(self):
         fb = m.FrameBuffer()

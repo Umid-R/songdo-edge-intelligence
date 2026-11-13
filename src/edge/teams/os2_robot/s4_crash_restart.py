@@ -151,7 +151,7 @@ def _wait_state(st, sup, cond, timeout=15.0):
 def run(kill_after_ticks=10, tail_ticks=10):
     """Returns (ok, report_lines)."""
     schema = os.path.join(ROOT, "sql", "schema.sql")
-    with tempfile.TemporaryDirectory() as tmp:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         db = os.path.join(tmp, "os2_motion.db")
         st = Storage(db, schema)
         sup = MotionSupervisor(db, schema)
