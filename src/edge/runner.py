@@ -32,7 +32,8 @@ from edge import registry as reg
 MAX_LINES = 4000              # in memory, per run
 MAX_LOG_BYTES = 5_000_000     # on disk, per run
 MAX_PARALLEL = 2              # standard runs at the same time (exclusive profiles run alone)
-TERMINAL = ("passed", "failed", "timeout", "cancelled", "error")
+TERMINAL = ("passed", "failed", "timeout", "cancelled", "error", "skipped")
+IS_LINUX = sys.platform.startswith("linux")
 
 _VERDICT = re.compile(r"^\s*\[(PASS|FAIL)\]\s*(.*)")
 _COUNT = re.compile(r"(\d+)\s*/\s*(\d+)\s+checks passed")
@@ -276,6 +277,12 @@ class RunManager:
             if run.cancel_requested:
                 run.state = "cancelled"
                 return
+            if run.scenario.requires_linux and not IS_LINUX:
+                run.state = "skipped"
+                run.error = f"needs Linux ({run.scenario.requires_linux}); this machine is {sys.platform}"
+                run.lines.append(f"[SKIP] {run.scenario.id}: {run.error}")
+                run.line_count += 1
+                return
             self._spawn_and_wait(run, echo)
         except Exception as e:                                # never leave a run "running"
             run.state, run.error = "error", f"{type(e).__name__}: {e}"
@@ -452,6 +459,7 @@ class RunManager:
             "seed": run.seed,
             "state": run.state, "exit_code": run.exit_code,
             "verdict": "PASS" if run.state == "passed" else run.state.upper(),
+            "requires_linux": run.scenario.requires_linux or None,
             "started_at": run.started_at, "ended_at": run.ended_at, "duration_s": run.elapsed_s,
             "checks": parse_checks(lines),
             "telemetry": {"samples": len(tele), "peak_rss_kb": max((t["rss_kb"] for t in tele), default=None),
@@ -485,6 +493,7 @@ class RunManager:
                     "ended_at": batch.get("ended_at"), "git_revision": git_revision(self.root),
                     "platform": platform_info(),
                     "passed": sum(r.state == "passed" for r in runs), "total": len(runs),
+                    "skipped": sum(r.state == "skipped" for r in runs),
                     "runs": [{"scenario_id": r.scenario.id, "run_id": r.run_id, "state": r.state,
                               "exit_code": r.exit_code, "duration_s": r.elapsed_s} for r in runs]}
         path = os.path.join(os.path.dirname(self.results_dir), "manifests", f"{batch_id}_{source}.json")

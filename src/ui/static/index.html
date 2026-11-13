@@ -13,7 +13,7 @@ header .sp{flex:1}
 .badge{display:inline-block;padding:.12rem .55rem;border-radius:999px;font-size:.78rem;font-weight:650;white-space:nowrap}
 .on{background:var(--okbg);color:var(--ok)}.off{background:var(--badbg);color:var(--bad)}
 .running,.queued{background:var(--runbg);color:var(--run)}.passed{background:var(--okbg);color:var(--ok)}
-.failed,.error,.timeout{background:var(--badbg);color:var(--bad)}.cancelled{background:var(--warnbg);color:var(--warn)}
+.failed,.error,.timeout{background:var(--badbg);color:var(--bad)}.cancelled,.skipped{background:var(--warnbg);color:var(--warn)}
 .none{background:#eef0f3;color:var(--mute)}
 button{font:inherit;border:1px solid var(--line);background:#fff;color:var(--ink);padding:.32rem .75rem;border-radius:6px;cursor:pointer}
 button:hover{border-color:#9aa5b1}button:disabled{opacity:.45;cursor:default}
@@ -196,7 +196,7 @@ function renderScen(){
   if(s.theme!==cur){cur=s.theme;const t=THEMES[cur];html+=`<tr class="theme"><td colspan="5">${esc(t.title)} <span class="mute" style="font-weight:400">· ${esc(t.site)} · ${esc(t.members)}</span></td></tr>`;}
   const lr=lastRun(s.id),st=lr?lr.state:'none',busy=lr&&(st==='running'||st==='queued');
   const sel=document.querySelector(`select[data-p="${s.id}"]`);const pv=sel?sel.value:'standard';
-  html+=`<tr class="${lr&&SEL===lr.run_id?'sel':''}"><td class="mono">${s.id}</td><td><b>${esc(s.title)}</b><div class="mute" style="font-size:.8rem">${esc(s.concept)}</div></td>
+  html+=`<tr class="${lr&&SEL===lr.run_id?'sel':''}"><td class="mono">${s.id}</td><td><b>${esc(s.title)}</b><div class="mute" style="font-size:.8rem">${esc(s.concept)}${s.requires_linux?` · <span title="${esc(s.requires_linux)}">Linux kernel feature</span>`:''}</div></td>
    <td>${lr?`<a href="#" onclick="openRun('${lr.run_id}');return false"><span class="badge ${st}">${st}</span></a> <span class="mute" style="font-size:.78rem">${secs(lr.elapsed_s)}</span>`:'<span class="badge none">never</span>'}</td>
    <td><select data-p="${s.id}">${s.profiles.map(p=>`<option value="${p.id}" ${p.id===pv?'selected':''}>${esc(p.label)}</option>`).join('')}</select></td>
    <td>${busy?`<button class="danger" onclick="cancelRun('${lr.run_id}')">Cancel</button>`:`<button class="primary" onclick="runOne('${s.id}')">Run</button>`}</td></tr>`;

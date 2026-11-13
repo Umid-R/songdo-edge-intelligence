@@ -36,6 +36,7 @@ class Scenario:
     title: str
     concept: str
     profiles: Dict[str, Profile] = field(default_factory=dict)
+    requires_linux: str = ""       # non-empty: the Linux kernel feature it demonstrates on purpose
 
     @property
     def members(self):
@@ -44,7 +45,7 @@ class Scenario:
     def to_dict(self):
         return {"id": self.id, "theme": self.theme, "theme_title": THEMES[self.theme][0],
                 "site": THEMES[self.theme][2], "members": self.members, "module": self.module,
-                "title": self.title, "concept": self.concept,
+                "title": self.title, "concept": self.concept, "requires_linux": self.requires_linux,
                 "profiles": [{"id": p.id, "label": p.label, "args": list(p.fixed_args),
                               "timeout_s": p.timeout_s, "outage_s": p.outage_s, "exclusive": p.exclusive}
                              for p in self.profiles.values()]}
@@ -62,11 +63,27 @@ def _outage_profiles(flag, extra=()):
     }
 
 
+# Scenarios that use a Linux kernel feature on purpose. The handbook platform is Ubuntu 24.04;
+# on another OS the runner reports these as SKIPPED with this reason instead of failing.
+LINUX_ONLY = {
+    "OS1-4": "/proc/<pid>/stat and /proc/<pid>/status sampling",
+    "OS2-1": "AF_UNIX domain sockets",
+    "OS2-4": "SIGKILL, SIGCHLD and wait()",
+    "OS4-1": "selectors (epoll) on non-blocking pipes",
+    "OS4-4": "flock(1) and the systemd timer",
+    "OS5-1": "SIGKILL and /proc liveness checks",
+    "OS5-2": "SIGKILL, SIGCHLD and wait()",
+    "OS5-3": "SIGKILL of a deadlocked process",
+    "OS5-5": "SIGKILL, SIGCHLD and wait()",
+}
+
+
 def _s(sid, file, title, concept, extra=None):
     theme = sid.split("-")[0]
     profiles = {"standard": STANDARD}
     profiles.update(extra or {})
-    return Scenario(sid, theme, f"edge.teams.{THEMES[theme][1]}.{file}", title, concept, profiles)
+    return Scenario(sid, theme, f"edge.teams.{THEMES[theme][1]}.{file}", title, concept, profiles,
+                    LINUX_ONLY.get(sid, ""))
 
 
 SCENARIOS: Dict[str, Scenario] = {s.id: s for s in [

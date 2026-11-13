@@ -23,7 +23,8 @@ sys.path.insert(0, os.path.join(ROOT, "src"))
 from edge import registry as reg           # noqa: E402
 from edge.runner import RunManager         # noqa: E402
 
-LABEL = {"passed": "PASS", "failed": "FAIL", "timeout": "TIMEOUT", "cancelled": "CANCEL", "error": "ERROR"}
+LABEL = {"passed": "PASS", "failed": "FAIL", "timeout": "TIMEOUT", "cancelled": "CANCEL", "error": "ERROR",
+         "skipped": "SKIP"}
 
 
 def main():
@@ -57,12 +58,15 @@ def main():
         runs.append(run)
         status = LABEL.get(run.state, run.state)
         print(f"{status:7} {s.theme} {s.module.rsplit('.', 1)[1]:34} {run.elapsed_s:6.1f} s   {s.id}", flush=True)
-        if run.state != "passed" and not args.verbose:
+        if run.state == "skipped":
+            print("        ", run.error)
+        elif run.state != "passed" and not args.verbose:
             for line in list(run.lines)[-12:]:
                 print("        ", line)
     mgr.batches[batch_id]["state"] = "finished"
     manifest, path = mgr.write_manifest(batch_id, "cli")
-    print(f"\n{manifest['passed']}/{manifest['total']} scenarios passed")
+    print(f"\n{manifest['passed']}/{manifest['total']} scenarios passed"
+          + (f" ({manifest['skipped']} skipped: they need Linux)" if manifest["skipped"] else ""))
     print(f"evidence: {os.path.relpath(args.results, ROOT)}/<run_id>/evidence.json   "
           f"manifest: {os.path.relpath(path, ROOT)}")
     return 0 if manifest["passed"] == manifest["total"] else 1
