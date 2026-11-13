@@ -69,7 +69,9 @@ class Supervisor:
         os.replace(tmp, path)          # atomic
 
     def start(self):
-        Storage(self.cfg["paths"]["db"], self.cfg["paths"]["schema"])   # create schema once
+        st = Storage(self.cfg["paths"]["db"], self.cfg["paths"]["schema"])   # create schema once
+        st.kv_set("generation_paused", "0")       # a new node always starts generating
+        st.close()
         for name in self._specs():
             self._spawn(name)
 

@@ -43,6 +43,9 @@ def sensor_gen_main(cfg, q, stop):
     node = cfg["node"]["id"]
     storage = Storage(cfg["paths"]["db"], cfg["paths"]["schema"], init=False)
     while not stop.is_set():
+        if storage.kv_get("generation_paused", "0") == "1":   # frozen at a recorded boundary
+            stop.wait(cfg["sensor"]["interval_s"])            # (outage acceptance: G = C = A)
+            continue
         for s in cfg["sensor"]["streams"]:
             value = s["base"] + rng.gauss(0, s.get("noise", 0))
             if rng.random() < s.get("spike_prob", 0):

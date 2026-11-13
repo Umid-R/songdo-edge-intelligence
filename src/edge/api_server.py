@@ -1,6 +1,7 @@
 """Zero-dependency local HTTP API + web console (http.server only).
 
-Node:       GET  /api/status, GET /api/reconcile, POST /api/wan/cut, POST /api/wan/restore
+Node:       GET  /api/status, GET /api/reconcile, POST /api/wan/cut, POST /api/wan/restore,
+            POST /api/generation/pause, POST /api/generation/resume
 Scenarios:  GET  /api/scenarios                       registry (25 official tasks + profiles)
             POST /api/runs        {"scenario_id", "profile"}           start one run
             POST /api/batches     {"theme" | "scenario_ids", "profile"} run several, one by one
@@ -53,7 +54,9 @@ def node_status(cfg, storage):
         sync = json.loads(storage.kv_get("sync_stats", "{}"))
     except ValueError:
         queue, sync = {}, {}
-    return {"node": cfg["node"]["id"], "ts": time.time(), "wan_online": storage.wan_online(),
+    return {"node": cfg["node"]["id"], "ts": time.time(), "mono": time.monotonic(),
+            "wan_online": storage.wan_online(),
+            "generation_paused": storage.kv_get("generation_paused", "0") == "1",
             "outbox_pending": pending, "counts": counts, "conservation": conservation,
             "receiver": receiver, "queue": queue, "sync": sync,
             "actuators": storage.actuator_states(), "recovery": storage.recovery_report(),
@@ -157,6 +160,10 @@ def make_handler(cfg, storage, runs=None):
             if path == "/api/wan/restore":
                 storage.set_wan_online(True)
                 return self._send(200, {"wan_online": storage.wan_online()})
+            if path in ("/api/generation/pause", "/api/generation/resume"):
+                paused = path.endswith("pause")
+                storage.kv_set("generation_paused", "1" if paused else "0")
+                return self._send(200, {"generation_paused": paused})
             if runs is None:
                 return self._err(404, "not found")
             try:
