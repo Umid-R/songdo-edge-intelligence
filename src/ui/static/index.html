@@ -1,32 +1,273 @@
 <!DOCTYPE html>
-<html lang="en"><head><meta charset="utf-8"><title>Songdo Edge Console</title>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Songdo Edge Console</title>
 <style>
- body{font-family:system-ui,sans-serif;margin:2rem;max-width:900px}
- .badge{padding:.2rem .6rem;border-radius:.4rem;color:#fff;font-weight:600}
- .on{background:#2e7d32}.off{background:#c62828}
- table{border-collapse:collapse;width:100%;margin-top:1rem}
- td,th{border:1px solid #ccc;padding:.3rem .6rem;text-align:left}
- button{margin-right:.5rem;padding:.4rem .8rem}
+:root{--bg:#f6f7f9;--card:#fff;--ink:#1d232b;--mute:#66707c;--line:#dfe3e8;--ok:#1f7a3a;--okbg:#e5f4ea;
+ --bad:#b3261e;--badbg:#fbe9e7;--run:#1d5fb4;--runbg:#e6effb;--warn:#8a5a00;--warnbg:#fdf3dc}
+*{box-sizing:border-box}
+body{margin:0;font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif;background:var(--bg);color:var(--ink)}
+header{display:flex;flex-wrap:wrap;align-items:center;gap:.6rem 1rem;padding:.8rem 1.4rem;background:#14202e;color:#fff}
+header h1{font-size:1.05rem;margin:0 1rem 0 0;font-weight:650;letter-spacing:.01em}
+header .node{color:#b9c6d6;font-family:ui-monospace,monospace;font-size:.85rem}
+header .sp{flex:1}
+.badge{display:inline-block;padding:.12rem .55rem;border-radius:999px;font-size:.78rem;font-weight:650;white-space:nowrap}
+.on{background:var(--okbg);color:var(--ok)}.off{background:var(--badbg);color:var(--bad)}
+.running,.queued{background:var(--runbg);color:var(--run)}.passed{background:var(--okbg);color:var(--ok)}
+.failed,.error,.timeout{background:var(--badbg);color:var(--bad)}.cancelled{background:var(--warnbg);color:var(--warn)}
+.none{background:#eef0f3;color:var(--mute)}
+button{font:inherit;border:1px solid var(--line);background:#fff;color:var(--ink);padding:.32rem .75rem;border-radius:6px;cursor:pointer}
+button:hover{border-color:#9aa5b1}button:disabled{opacity:.45;cursor:default}
+button.primary{background:var(--run);border-color:var(--run);color:#fff}
+button.danger{background:#fff;border-color:#e3b2ad;color:var(--bad)}
+header button{background:#22334a;border-color:#34495f;color:#fff}header button:hover{border-color:#6d8299}
+select{font:inherit;padding:.28rem .4rem;border:1px solid var(--line);border-radius:6px;background:#fff}
+nav{display:flex;gap:.2rem;padding:0 1.4rem;background:#fff;border-bottom:1px solid var(--line)}
+nav button{border:0;border-bottom:2px solid transparent;border-radius:0;padding:.7rem .9rem;background:none;color:var(--mute);font-weight:600}
+nav button.active{color:var(--ink);border-bottom-color:var(--run)}
+main{padding:1.1rem 1.4rem;max-width:1400px}
+.tab{display:none}.tab.active{display:block}
+.kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:.7rem;margin-bottom:1rem}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem}
+.kpi .v{font-size:1.35rem;font-weight:650;font-variant-numeric:tabular-nums}.kpi .l{color:var(--mute);font-size:.78rem}
+.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:.8rem 1rem;margin-bottom:1rem}
+.card h2{font-size:.92rem;margin:0 0 .6rem;display:flex;align-items:center;gap:.6rem}
+.card h2 .sp{flex:1}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+@media(max-width:1000px){.grid2{grid-template-columns:1fr}}
+table{border-collapse:collapse;width:100%}
+th,td{text-align:left;padding:.36rem .5rem;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--mute);font-weight:600;font-size:.78rem;text-transform:uppercase;letter-spacing:.03em}
+td.num{font-variant-numeric:tabular-nums;text-align:right}
+tr.sel td{background:#f1f6fd}
+tr.theme td{background:#f3f5f8;font-weight:650;padding-top:.6rem}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.82rem;white-space:nowrap}
+.mute{color:var(--mute)}
+.split{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:1rem;align-items:start}
+@media(max-width:1100px){.split{grid-template-columns:1fr}}
+.sticky{position:sticky;top:.8rem}
+pre.log{background:#0f1720;color:#d6dde6;border-radius:6px;padding:.6rem .7rem;height:340px;overflow:auto;margin:.5rem 0 0;
+ font:12px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap;word-break:break-word}
+pre.log .f{color:#ff8a80}pre.log .p{color:#8ee39b}
+.kv{display:grid;grid-template-columns:max-content 1fr;gap:.2rem .9rem;font-size:.86rem}
+.kv div:nth-child(odd){color:var(--mute)}
+.chips{display:flex;flex-wrap:wrap;gap:.4rem;align-items:center}
+.chips button.active{background:var(--ink);color:#fff;border-color:var(--ink)}
+.toolbar{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;margin-bottom:.7rem}
+.msg{margin-left:.4rem;font-size:.85rem}
+.empty{color:var(--mute);padding:1.2rem 0;text-align:center}
+.bar{height:6px;background:#e8ebef;border-radius:3px;overflow:hidden;margin-top:.3rem}
+.bar i{display:block;height:100%;background:var(--run)}
 </style></head><body>
-<h1>Songdo Edge Console</h1>
-<p>Node: <b id="node">-</b> &nbsp; <span id="wan" class="badge">-</span></p>
-<p><button onclick="post('cut')">Simulate WAN Internet Cut</button>
-   <button onclick="post('restore')">Restore WAN Connection</button></p>
-<p>Events: <b id="ev">0</b> | Decisions: <b id="dec">0</b> | Outbox queued: <b id="ob">0</b> | Delivered: <b id="sink">0</b> | Conserved: <b id="cons">-</b></p>
-<table><thead><tr><th>Process</th><th>PID</th><th>State</th><th>CPU %</th><th>RSS (kB)</th><th>Ctx vol</th><th>Ctx invol</th><th>Restarts</th></tr></thead>
-<tbody id="rows"></tbody></table>
+<header>
+ <h1>Songdo Edge Console</h1><span class="node" id="node">-</span>
+ <span id="wan" class="badge none">WAN -</span><span id="recv" class="badge none">receiver -</span>
+ <span class="sp"></span>
+ <button onclick="wan('cut')">Simulate WAN Internet Cut</button>
+ <button onclick="wan('restore')">Restore WAN Connection</button>
+</header>
+<nav>
+ <button class="active" data-tab="scen">Scenarios (25 tasks)</button>
+ <button data-tab="node">Live node</button>
+ <button data-tab="runs">Run history</button>
+</nav>
+<main>
+<!-- ================= Scenarios ================= -->
+<section class="tab active" id="tab-scen">
+ <div class="split">
+  <div>
+   <div class="card">
+    <div class="toolbar">
+     <div class="chips" id="themes"></div><span class="sp" style="flex:1"></span>
+     <select id="batchProfile"><option value="standard">Standard check</option><option value="outage60">WAN cut 60 s (s5 tasks)</option></select>
+     <button class="primary" id="runAll" onclick="runBatch()">Run all</button>
+     <span class="msg" id="scenMsg"></span>
+    </div>
+    <table><thead><tr><th>ID</th><th>Scenario</th><th>Last run</th><th>Profile</th><th></th></tr></thead>
+     <tbody id="scenRows"><tr><td colspan="5" class="empty">loading registry…</td></tr></tbody></table>
+   </div>
+  </div>
+  <div class="sticky">
+   <div class="card" id="detail">
+    <h2><span id="dTitle">Select a run</span><span class="sp"></span><span id="dState" class="badge none">-</span></h2>
+    <div id="dBody" class="mute">Start a scenario with <b>Run</b>, or pick a row in <i>Run history</i>.
+     Each run gets its own directory, database, socket namespace, seed and process group, and ends
+     with a JSON evidence file.</div>
+   </div>
+  </div>
+ </div>
+</section>
+<!-- ================= Node ================= -->
+<section class="tab" id="tab-node">
+ <div class="kpis">
+  <div class="kpi"><div class="v" id="kEv">0</div><div class="l">Events committed</div></div>
+  <div class="kpi"><div class="v" id="kDec">0</div><div class="l">Local decisions</div></div>
+  <div class="kpi"><div class="v" id="kOb">0</div><div class="l">Outbox queued</div></div>
+  <div class="kpi"><div class="v" id="kSink">0</div><div class="l">Stored at receiver</div></div>
+  <div class="kpi"><div class="v" id="kCons">-</div><div class="l">Conserved</div></div>
+  <div class="kpi"><div class="v" id="kQ">-</div><div class="l">Queue (size / cap)</div><div class="bar"><i id="kQbar" style="width:0"></i></div></div>
+  <div class="kpi"><div class="v" id="kDrop">0</div><div class="l">Dropped from queue (recovered from ingress)</div></div>
+  <div class="kpi"><div class="v" id="kRec">-</div><div class="l">Recovery exit rule</div></div>
+ </div>
+ <div class="grid2">
+  <div class="card"><h2>ID reconciliation (generated / committed / acknowledged / receiver)<span class="sp"></span>
+   <button onclick="reconcile()">Reconcile now</button></h2>
+   <div id="recon" class="mute">Compares the event-ID sets on both sides of the receiver boundary.</div></div>
+  <div class="card"><h2>Actuators &amp; command intents</h2><div id="act" class="mute">no command applied yet</div></div>
+ </div>
+ <div class="card"><h2>Processes (live from /proc)</h2>
+  <table><thead><tr><th>Process</th><th>PID</th><th>State</th><th class="num">CPU %</th><th class="num">RSS (kB)</th>
+   <th class="num">Ctx vol</th><th class="num">Ctx invol</th><th class="num">Restarts</th></tr></thead><tbody id="rows"></tbody></table>
+ </div>
+ <div class="card"><h2>Sync to receiver</h2><div id="sync" class="kv"></div></div>
+</section>
+<!-- ================= Runs ================= -->
+<section class="tab" id="tab-runs">
+ <div class="card"><h2>Runs<span class="sp"></span><span class="mute" id="runCount"></span></h2>
+  <table><thead><tr><th>Run ID</th><th>Scenario</th><th>Profile</th><th>State</th><th class="num">Elapsed</th><th>Started</th><th></th></tr></thead>
+   <tbody id="runRows"><tr><td colspan="7" class="empty">no runs yet</td></tr></tbody></table></div>
+ <div class="card"><h2>Batches</h2><div id="batches" class="mute">none</div></div>
+</section>
+</main>
 <script>
-async function post(a){await fetch('/api/wan/'+a,{method:'POST'});refresh();}
-async function refresh(){
- try{const s=await (await fetch('/api/status')).json();
-  node.textContent=s.node;
-  wan.textContent=s.wan_online?'WAN: ONLINE':'WAN: OFFLINE (DISCONNECTED)';
-  wan.className='badge '+(s.wan_online?'on':'off');
-  ev.textContent=s.counts.events;dec.textContent=s.counts.decisions;
-  ob.textContent=s.outbox_pending;sink.textContent=s.counts.sink;
-  cons.textContent=s.conservation.conserved?'yes':'NO';
-  rows.innerHTML=s.processes.map(p=>`<tr><td>${p.name}</td><td>${p.pid}</td><td>${p.state}</td><td>${p.cpu_pct}</td><td>${p.rss_kb}</td><td>${p.ctx_voluntary}</td><td>${p.ctx_involuntary}</td><td>${p.restarts}</td></tr>`).join('');
- }catch(e){wan.textContent='API unreachable';wan.className='badge off';}
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let REG=[], THEME='ALL', RUNS=[], BATCHES=[], SEL=null, LOGNEXT=0, LOGRUN=null;
+async function api(path,opt){const r=await fetch(path,opt);const t=await r.text();let j;try{j=JSON.parse(t)}catch(e){j={error:t}}
+ if(!r.ok)throw new Error(j.error||r.statusText);return j;}
+const post=(p,b)=>api(p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b||{})});
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
+ document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('active',x===b));
+ document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.id==='tab-'+b.dataset.tab));});
+function fmt(n){return n==null?'-':Number(n).toLocaleString()}
+function secs(s){if(s==null)return'-';s=Number(s);return s<90?s.toFixed(1)+' s':Math.floor(s/60)+' min '+Math.round(s%60)+' s'}
+
+// ---------- node ----------
+async function wan(a){await post('/api/wan/'+a);refreshNode();}
+async function refreshNode(){
+ try{const s=await api('/api/status');
+  $('node').textContent=s.node;
+  $('wan').textContent=s.wan_online?'WAN ONLINE':'WAN OFFLINE (DISCONNECTED)';$('wan').className='badge '+(s.wan_online?'on':'off');
+  const rc=s.receiver||{};$('recv').textContent=rc.url?('receiver '+(rc.reachable?'up':'unreachable')):'local sink';
+  $('recv').className='badge '+(rc.url?(rc.reachable?'on':'off'):'none');
+  $('kEv').textContent=fmt(s.counts.events);$('kDec').textContent=fmt(s.counts.decisions);$('kOb').textContent=fmt(s.outbox_pending);
+  $('kSink').textContent=fmt(s.conservation.sink);$('kCons').textContent=s.conservation.conserved?'yes':'NO';
+  $('kCons').style.color=s.conservation.conserved?'var(--ok)':'var(--bad)';
+  const q=s.queue||{};$('kQ').textContent=q.maxsize?(q.qsize+' / '+q.maxsize):'-';$('kQbar').style.width=q.maxsize?(100*q.qsize/q.maxsize)+'%':'0';
+  $('kDrop').textContent=fmt(q.dropped||0);
+  const rv=s.recovery||{};$('kRec').textContent=rv.ok?'ok':'CHECK';$('kRec').style.color=rv.ok?'var(--ok)':'var(--bad)';
+  $('rows').innerHTML=s.processes.map(p=>`<tr><td>${esc(p.name)}</td><td class="mono">${p.pid}</td><td>${esc(p.state)}</td><td class="num">${p.cpu_pct}</td><td class="num">${fmt(p.rss_kb)}</td><td class="num">${fmt(p.ctx_voluntary)}</td><td class="num">${fmt(p.ctx_involuntary)}</td><td class="num">${p.restarts}</td></tr>`).join('');
+  const it=rv.intents||{};
+  $('act').innerHTML=(s.actuators.length?`<table><thead><tr><th>Actuator</th><th class="num">Value</th><th class="num">Last seq</th><th>Applied</th></tr></thead><tbody>${
+   s.actuators.map(a=>`<tr><td class="mono">${esc(a.actuator)}</td><td class="num">${a.value}</td><td class="num">${a.last_seq}</td><td>${new Date(a.applied_at*1000).toLocaleTimeString()}</td></tr>`).join('')}</tbody></table>`:'<div class="mute">no command applied yet</div>')+
+   `<div class="kv" style="margin-top:.6rem"><div>Intents</div><div>${Object.entries(it).map(([k,v])=>esc(k)+' '+v).join(' · ')||'-'}</div>
+    <div>Receipts / dispatched</div><div>${rv.receipts??'-'} / ${rv.dispatched??'-'}</div>
+    <div>Admitted / unprocessed</div><div>${fmt(rv.admitted)} / ${fmt(rv.unprocessed)}</div></div>`;
+  const sy=s.sync||{};$('sync').innerHTML=['offered','acked','missing_acks','unrelated_acks','receiver_duplicates','failed_posts']
+   .map(k=>`<div>${k.replace(/_/g,' ')}</div><div>${fmt(sy[k]||0)}</div>`).join('');
+ }catch(e){$('wan').textContent='API unreachable';$('wan').className='badge off';}
 }
-refresh();setInterval(refresh,1000);
+async function reconcile(){
+ $('recon').textContent='reconciling…';
+ try{const r=await api('/api/reconcile');
+  const row=(k,l,good)=>`<div>${l}</div><div class="mono" style="color:${good===undefined?'inherit':(good?'var(--ok)':'var(--bad)')}">${fmt(r[k])}</div>`;
+  $('recon').innerHTML=`<div class="kv">${row('generated','G generated (ingress)')}${row('committed','C committed')}${row('acknowledged','A acknowledged (marked sent)')}
+   ${row('receiver','R stored at receiver')}${row('pending','pending in outbox')}${row('admitted_not_committed','G − C (in flight)')}
+   ${row('acked_but_not_at_receiver','A − R (false "sent")',r.acked_but_not_at_receiver===0)}${row('at_receiver_unknown_to_node','R − C (unknown IDs)',r.at_receiver_unknown_to_node===0)}
+   ${row('pending_but_already_at_receiver','pending ∩ R (lost ACKs, resend dedupes)')}${row('receiver_duplicates_ignored','resends ignored by receiver')}
+   <div>Conserved</div><div style="font-weight:650;color:${r.conserved?'var(--ok)':'var(--bad)'}">${r.conserved?'yes':'NO'}</div>
+   <div>Fully drained (G = C = A = R)</div><div style="font-weight:650">${r.fully_drained?'yes':'not yet'}</div></div>`;
+ }catch(e){$('recon').textContent='error: '+e.message;}
+}
+
+// ---------- scenarios ----------
+async function loadRegistry(){
+ const r=await api('/api/scenarios');REG=r.scenarios;
+ $('themes').innerHTML=['ALL',...Object.keys(r.themes)].map(t=>`<button data-t="${t}" class="${t===THEME?'active':''}" title="${t==='ALL'?'':esc(r.themes[t].title+' · '+r.themes[t].members)}">${t==='ALL'?'All 25':t}</button>`).join('');
+ $('themes').querySelectorAll('button').forEach(b=>b.onclick=()=>{THEME=b.dataset.t;$('themes').querySelectorAll('button').forEach(x=>x.classList.toggle('active',x===b));
+  $('runAll').textContent=THEME==='ALL'?'Run all 25':'Run all '+THEME;renderScen();});
+ window.THEMES=r.themes;renderScen();
+}
+function lastRun(sid){return RUNS.find(r=>r.scenario_id===sid)}
+function renderScen(){
+ const active=RUNS.some(r=>r.state==='running'||r.state==='queued');
+ let html='',cur='';
+ for(const s of REG){
+  if(THEME!=='ALL'&&s.theme!==THEME)continue;
+  if(s.theme!==cur){cur=s.theme;const t=THEMES[cur];html+=`<tr class="theme"><td colspan="5">${esc(t.title)} <span class="mute" style="font-weight:400">· ${esc(t.site)} · ${esc(t.members)}</span></td></tr>`;}
+  const lr=lastRun(s.id),st=lr?lr.state:'none',busy=lr&&(st==='running'||st==='queued');
+  const sel=document.querySelector(`select[data-p="${s.id}"]`);const pv=sel?sel.value:'standard';
+  html+=`<tr class="${lr&&SEL===lr.run_id?'sel':''}"><td class="mono">${s.id}</td><td><b>${esc(s.title)}</b><div class="mute" style="font-size:.8rem">${esc(s.concept)}</div></td>
+   <td>${lr?`<a href="#" onclick="openRun('${lr.run_id}');return false"><span class="badge ${st}">${st}</span></a> <span class="mute" style="font-size:.78rem">${secs(lr.elapsed_s)}</span>`:'<span class="badge none">never</span>'}</td>
+   <td><select data-p="${s.id}">${s.profiles.map(p=>`<option value="${p.id}" ${p.id===pv?'selected':''}>${esc(p.label)}</option>`).join('')}</select></td>
+   <td>${busy?`<button class="danger" onclick="cancelRun('${lr.run_id}')">Cancel</button>`:`<button class="primary" onclick="runOne('${s.id}')">Run</button>`}</td></tr>`;
+ }
+ $('scenRows').innerHTML=html;$('runAll').disabled=active;
+}
+async function runOne(sid){
+ const prof=document.querySelector(`select[data-p="${sid}"]`).value;$('scenMsg').textContent='';
+ try{const r=await post('/api/runs',{scenario_id:sid,profile:prof});await refreshRuns();openRun(r.run_id);}
+ catch(e){$('scenMsg').textContent=e.message;$('scenMsg').style.color='var(--bad)';}
+}
+async function runBatch(){
+ $('scenMsg').textContent='';const prof=$('batchProfile').value;
+ const body={profile:prof};
+ if(prof==='standard'){if(THEME!=='ALL')body.theme=THEME;}
+ else body.scenario_ids=REG.filter(s=>(THEME==='ALL'||s.theme===THEME)&&s.profiles.some(p=>p.id===prof)).map(s=>s.id);
+ try{const b=await post('/api/batches',body);$('scenMsg').style.color='var(--mute)';$('scenMsg').textContent=`batch ${b.batch_id}: ${b.scenario_ids.length} scenarios, one at a time`;refreshRuns();}
+ catch(e){$('scenMsg').textContent=e.message;$('scenMsg').style.color='var(--bad)';}
+}
+async function cancelRun(id){try{await post('/api/runs/'+id+'/cancel');}catch(e){} refreshRuns();}
+
+// ---------- run detail ----------
+function openRun(id){SEL=id;LOGNEXT=0;LOGRUN=id;$('dBody').innerHTML=detailSkeleton();
+ document.querySelector('nav button[data-tab="scen"]').click();refreshDetail(true);renderScen();}
+function detailSkeleton(){return `<div class="kv" id="dKv"></div>
+ <div style="margin:.6rem 0 .2rem;display:flex;gap:.5rem;flex-wrap:wrap">
+  <button class="danger" id="dCancel" onclick="cancelRun(SEL)">Cancel run</button>
+  <button id="dExport" onclick="location.href='/api/runs/'+SEL+'/evidence'">Export evidence JSON</button>
+  <label class="mute" style="font-size:.82rem;align-self:center"><input type="checkbox" id="dFollow" checked> follow log</label></div>
+ <div id="dChecks"></div><pre class="log" id="dLog"></pre>`;}
+async function refreshDetail(force){
+ if(!SEL)return;
+ try{const d=await api('/api/runs/'+SEL);
+  $('dTitle').textContent=d.scenario_id+' · '+d.title;$('dState').textContent=d.state;$('dState').className='badge '+d.state;
+  const t=d.telemetry||{};const pct=d.timeout_s?Math.min(100,100*d.elapsed_s/d.timeout_s):0;
+  $('dKv').innerHTML=`<div>Run ID</div><div class="mono">${d.run_id}</div><div>Profile</div><div>${esc(d.profile_label)}${d.outage_s?' (WAN cut '+d.outage_s+' s)':''}</div>
+   <div>Elapsed / budget</div><div>${secs(d.elapsed_s)} / ${secs(d.timeout_s)}<div class="bar"><i style="width:${pct}%"></i></div></div>
+   <div>Scenario PID</div><div class="mono">${d.pid??'-'}${d.exit_code!=null?' · exit code '+d.exit_code:''}</div>
+   <div>Telemetry</div><div>${t.rss_kb?fmt(t.rss_kb)+' kB RSS · '+t.cpu_pct+' % CPU · ctx '+fmt(t.ctx_voluntary)+'/'+fmt(t.ctx_involuntary):'-'}${d.peak_rss_kb?' · peak '+fmt(d.peak_rss_kb)+' kB':''}</div>
+   <div>Output</div><div>${fmt(d.line_count)} lines</div>${d.error?`<div>Error</div><div style="color:var(--bad)">${esc(d.error)}</div>`:''}`;
+  const live=d.state==='running'||d.state==='queued';$('dCancel').disabled=!live;
+  const c=d.checks;
+  $('dChecks').innerHTML=c?`<div style="margin-top:.4rem"><b>${esc(c.verdict_line||'(no verdict line)')}</b>${c.counts?` <span class="mute">${c.counts.passed}/${c.counts.total} checks</span>`:''}
+   ${c.failed_checks.length?`<div style="color:var(--bad);margin-top:.3rem">${c.failed_checks.map(esc).join('<br>')}</div>`:''}
+   ${c.summary.length?`<div class="mute" style="font-size:.82rem;margin-top:.3rem">${c.summary.slice(0,8).map(esc).join('<br>')}</div>`:''}</div>`:'';
+  await pullLog();
+ }catch(e){$('dBody').textContent='run not found';}
+}
+async function pullLog(){
+ if(LOGRUN!==SEL)return;
+ const l=await api(`/api/runs/${SEL}/log?start=${LOGNEXT}&limit=1000`);
+ if(l.lines.length){const pre=$('dLog');
+  pre.insertAdjacentHTML('beforeend',l.lines.map(x=>{const e=esc(x);return /FAILED|\[FAIL\]|Traceback/.test(x)?`<span class="f">${e}</span>`:/\[PASS\]/.test(x)?`<span class="p">${e}</span>`:e}).join('\n')+'\n');
+  if(pre.childNodes.length>6000)pre.textContent=pre.textContent.slice(-200000);
+  if($('dFollow').checked)pre.scrollTop=pre.scrollHeight;}
+ LOGNEXT=l.next;
+}
+
+// ---------- runs ----------
+async function refreshRuns(){
+ try{const r=await api('/api/runs');RUNS=r.runs;BATCHES=r.batches;}catch(e){return;}
+ $('runCount').textContent=RUNS.length+' runs this session · evidence in results/runs/<run_id>/';
+ $('runRows').innerHTML=RUNS.length?RUNS.map(r=>`<tr class="${SEL===r.run_id?'sel':''}"><td class="mono"><a href="#" onclick="openRun('${r.run_id}');return false">${r.run_id}</a></td><td>${r.scenario_id} <span class="mute">${esc(r.title)}</span></td><td>${esc(r.profile_label)}</td>
+  <td><span class="badge ${r.state}">${r.state}</span></td><td class="num">${secs(r.elapsed_s)}</td><td class="mute">${r.started_at?new Date(r.started_at).toLocaleTimeString():'-'}</td>
+  <td><a href="/api/runs/${r.run_id}/evidence">evidence</a></td></tr>`).join(''):'<tr><td colspan="7" class="empty">no runs yet</td></tr>';
+ $('batches').innerHTML=BATCHES.length?`<table><thead><tr><th>Batch</th><th>Profile</th><th>Progress</th><th>State</th><th>Manifest</th><th></th></tr></thead><tbody>${BATCHES.map(b=>{
+  const rs=RUNS.filter(r=>r.batch_id===b.batch_id),ok=rs.filter(r=>r.state==='passed').length;
+  return `<tr><td class="mono">${b.batch_id}</td><td>${esc(b.profile)}</td><td>${rs.length}/${b.scenario_ids.length} run · <b>${ok}</b> passed</td><td><span class="badge ${b.state==='running'?'running':b.state==='finished'?'passed':'cancelled'}">${b.state}</span></td>
+  <td class="mono mute">${esc(b.manifest||'')}</td><td>${b.state==='running'?`<button class="danger" onclick="post('/api/batches/${b.batch_id}/cancel').then(refreshRuns)">Cancel batch</button>`:''}</td></tr>`}).join('')}</tbody></table>`:'none';
+ renderScen();
+}
+loadRegistry().then(refreshRuns);refreshNode();
+setInterval(refreshNode,1000);setInterval(refreshRuns,1500);setInterval(()=>refreshDetail(false),1000);
 </script></body></html>
