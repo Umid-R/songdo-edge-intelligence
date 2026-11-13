@@ -17,6 +17,7 @@ from edge.config import load_config
 from edge.ipc import STOP, BoundedQueue, StopFlag
 from edge.storage import Storage
 from edge.sync_worker import sync_main
+from edge.upstream import upstream_main, upstream_settings
 from edge.workers import health_main, processor_main, sensor_gen_main
 
 log = logging.getLogger("supervisor")
@@ -35,13 +36,17 @@ class Supervisor:
 
     def _specs(self):
         c, q, s = self.cfg, self.queue, self.stop_event
-        return {
+        specs = {}
+        if upstream_settings(c):            # receiver first: separate process, separate database
+            specs["Upstream"] = (upstream_main, (c, s))
+        specs.update({
             "SensorGen": (sensor_gen_main, (c, q, s)),
             "Processor": (processor_main, (c, q, s)),
             "HealthMon": (health_main, (c, s)),
             "SyncWorker": (sync_main, (c, s)),
             "API": (api_main, (c, s)),
-        }
+        })
+        return specs
 
     def _spawn(self, name):
         fn, args = self._specs()[name]

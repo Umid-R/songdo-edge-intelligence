@@ -34,6 +34,11 @@ supervisor:
   window_s: 60
   restart_delay_s: 0.5
 
+upstream:                     # independent receiver process + database (mock Urban Data Platform)
+  enabled: true
+  host: 127.0.0.1
+  port: 9104
+
 sync:
   batch_size: 50
   interval_s: 1.0
