@@ -1,12 +1,28 @@
-"""Read per-process metrics straight from /proc (no psutil needed)."""
+"""Read per-process metrics straight from /proc (no psutil needed on Linux).
+
+Linux is the target platform. On a machine without /proc (Windows, macOS) the module still
+imports, and read_proc() falls back to psutil when it is installed, else returns None, so the
+dashboard shows no metrics instead of the whole program crashing at import time.
+"""
 import os
 import time
 
-CLK_TCK = os.sysconf("SC_CLK_TCK")
+try:
+    CLK_TCK = os.sysconf("SC_CLK_TCK")      # clock ticks per second for utime/stime
+except (AttributeError, ValueError, OSError):
+    CLK_TCK = 100                            # Linux default; only used with /proc
+
+HAVE_PROCFS = os.path.isdir("/proc/self")
+
+psutil = None
+if not HAVE_PROCFS:                          # optional fallback outside Linux, imported only there
+    try:
+        import psutil
+    except ImportError:                      # pragma: no cover
+        psutil = None
 
 
-def read_proc(pid):
-    """Return a metrics dict for pid, or None if the process is gone."""
+def _read_proc_linux(pid):
     try:
         with open(f"/proc/{pid}/status", encoding="utf-8") as f:
             status = f.read()
@@ -27,6 +43,26 @@ def read_proc(pid):
         "ctx_voluntary": int(fields.get("voluntary_ctxt_switches", 0)),
         "ctx_involuntary": int(fields.get("nonvoluntary_ctxt_switches", 0)),
     }
+
+
+def _read_proc_psutil(pid):
+    if psutil is None:
+        return None
+    try:
+        p = psutil.Process(pid)
+        with p.oneshot():
+            t = p.cpu_times()
+            ctx = p.num_ctx_switches()
+            return {"state": p.status()[:1].upper(), "ticks": int((t.user + t.system) * CLK_TCK),
+                    "rss_kb": p.memory_info().rss // 1024,
+                    "ctx_voluntary": ctx.voluntary, "ctx_involuntary": ctx.involuntary}
+    except (psutil.Error, OSError):
+        return None
+
+
+def read_proc(pid):
+    """Return a metrics dict for pid, or None if the process is gone (or cannot be read)."""
+    return _read_proc_linux(pid) if HAVE_PROCFS else _read_proc_psutil(pid)
 
 
 class ProcSampler:
