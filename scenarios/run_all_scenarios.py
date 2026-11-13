@@ -1,69 +1,71 @@
 #!/usr/bin/env python3
-"""Run every scenario (OS1..OS5 x 5 = 25) as its own process and print a summary table.
+"""Run the official scenarios (OS1-1 ... OS5-5) and print a summary table.
 
-    python3 scenarios/run_all_scenarios.py              # all 25 (takes a few minutes)
-    python3 scenarios/run_all_scenarios.py --theme os4  # one theme
-    python3 scenarios/run_all_scenarios.py --only s5    # scenarios whose file name starts with s5
+    python3 scenarios/run_all_scenarios.py                    # all 25, standard profile (~2 min)
+    python3 scenarios/run_all_scenarios.py --theme os4        # one theme
+    python3 scenarios/run_all_scenarios.py --only s5          # scenario number s5 of every theme
+    python3 scenarios/run_all_scenarios.py --only OS2-5 --profile outage600   # the 10-minute run
+    python3 scenarios/run_all_scenarios.py --list             # registry: IDs, modules, profiles
 
-Each scenario is run as `python -m edge.teams.<theme_folder>.<scenario>` from the repo root and counts
-as PASSED when its exit code is 0. Exit code of this script: 0 if everything passed, 1 otherwise.
+The scenarios come from the shared registry (src/edge/registry.py) and run through the same
+RunManager as the web console (src/edge/runner.py): same argv, same isolation (own run directory,
+TMPDIR, seed and process group), same evidence. Each run writes results/runs/<run_id>/evidence.json
+and the whole batch writes results/manifests/<batch>_cli.json, so CLI and console verdicts can be
+compared run for run. Exit code: 0 if everything passed, 1 otherwise.
 """
 import argparse
-import glob
 import os
-import subprocess
 import sys
-import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-THEMES = {"os1": "os1_building", "os2": "os2_robot", "os3": "os3_mobility", "os4": "os4_iot", "os5": "os5_reliable"}
+sys.path.insert(0, os.path.join(ROOT, "src"))
 
+from edge import registry as reg           # noqa: E402
+from edge.runner import RunManager         # noqa: E402
 
-def discover(theme=None, only=None):
-    found = []
-    for key, folder in THEMES.items():
-        if theme and key != theme.lower():
-            continue
-        for path in sorted(glob.glob(os.path.join(ROOT, "src", "edge", "teams", folder, "s[0-9]_*.py"))):
-            name = os.path.splitext(os.path.basename(path))[0]
-            if only and not name.startswith(only):
-                continue
-            found.append((key.upper(), name, f"edge.teams.{folder}.{name}"))
-    return found
+LABEL = {"passed": "PASS", "failed": "FAIL", "timeout": "TIMEOUT", "cancelled": "CANCEL", "error": "ERROR"}
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--theme", choices=[*THEMES, *[k.upper() for k in THEMES]], help="only this theme")
-    ap.add_argument("--only", help="only scenarios whose file name starts with this (e.g. s5)")
-    ap.add_argument("--timeout", type=int, default=240, help="seconds per scenario")
+    ap.add_argument("--theme", type=str.upper, choices=list(reg.THEMES), help="only this theme")
+    ap.add_argument("--only", help="scenario number (e.g. s5) or ID (e.g. OS2-5)")
+    ap.add_argument("--profile", default="standard", help="run profile (standard, outage60, outage600, long)")
+    ap.add_argument("--results", default=os.path.join(ROOT, "results", "runs"), help="run directory root")
+    ap.add_argument("--verbose", "-v", action="store_true", help="stream every scenario's output")
+    ap.add_argument("--list", action="store_true", help="print the registry and exit")
     args = ap.parse_args()
-    env = dict(os.environ, PYTHONPATH=os.path.join(ROOT, "src"))
-    venv_py = os.path.join(ROOT, ".venv", "bin", "python")
-    python = venv_py if os.path.exists(venv_py) else sys.executable   # .venv has pyyaml (setup.sh)
-    scenarios = discover(args.theme, args.only)
-    if not scenarios:
-        print("no scenarios found")
+
+    selected = reg.select(args.theme, args.only)
+    if args.list:
+        for s in selected:
+            print(f"{s.id:6} {s.module:48} {', '.join(s.profiles):28} {s.title}")
+        return 0
+    if args.profile != "standard":
+        selected = [s for s in selected if args.profile in s.profiles]
+    if not selected:
+        print("no scenarios match (check --theme / --only / --profile)")
         return 1
-    results = []
-    for theme, name, module in scenarios:
-        t0 = time.monotonic()
-        try:
-            p = subprocess.run([python, "-m", module], cwd=ROOT, env=env, capture_output=True,
-                               text=True, timeout=args.timeout)
-            status = "PASS" if p.returncode == 0 else "FAIL"
-            tail = (p.stdout + p.stderr).strip().splitlines()
-        except subprocess.TimeoutExpired:
-            status, tail = "TIMEOUT", []
-        dt = time.monotonic() - t0
-        results.append((theme, name, status, dt))
-        print(f"{status:7} {theme} {name:34} {dt:6.1f} s", flush=True)
-        if status != "PASS":
-            for line in tail[-12:]:
+
+    mgr = RunManager(ROOT, results_dir=args.results)
+    batch_id = mgr.new_cli_batch([s.id for s in selected], args.profile)
+    echo = (lambda line: print("        |", line, flush=True)) if args.verbose else None
+    runs = []
+    for s in selected:
+        run = mgr.run_sync(s.id, args.profile, batch_id=batch_id, echo=echo)
+        mgr.batches[batch_id]["run_ids"].append(run.run_id)
+        runs.append(run)
+        status = LABEL.get(run.state, run.state)
+        print(f"{status:7} {s.theme} {s.module.rsplit('.', 1)[1]:34} {run.elapsed_s:6.1f} s   {s.id}", flush=True)
+        if run.state != "passed" and not args.verbose:
+            for line in list(run.lines)[-12:]:
                 print("        ", line)
-    passed = sum(1 for r in results if r[2] == "PASS")
-    print(f"\n{passed}/{len(results)} scenarios passed")
-    return 0 if passed == len(results) else 1
+    mgr.batches[batch_id]["state"] = "finished"
+    manifest, path = mgr.write_manifest(batch_id, "cli")
+    print(f"\n{manifest['passed']}/{manifest['total']} scenarios passed")
+    print(f"evidence: {os.path.relpath(args.results, ROOT)}/<run_id>/evidence.json   "
+          f"manifest: {os.path.relpath(path, ROOT)}")
+    return 0 if manifest["passed"] == manifest["total"] else 1
 
 
 if __name__ == "__main__":
