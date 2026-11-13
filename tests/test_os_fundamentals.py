@@ -40,7 +40,7 @@ class Test1WalAndAtomicOutbox(unittest.TestCase):
     """1. SQLite WAL mode & atomic outbox enqueue."""
 
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory()
+        self.tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.st = Storage(os.path.join(self.tmp.name, "edge.db"), SCHEMA)
 
     def tearDown(self):
@@ -124,7 +124,7 @@ class Test5OnlineBackupIntegrity(unittest.TestCase):
     """5. Online SQLite backup integrity check."""
 
     def test_backup_is_complete_and_passes_integrity_check(self):
-        with tempfile.TemporaryDirectory() as tmp:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
             st = Storage(os.path.join(tmp, "edge.db"), SCHEMA)
             for i in range(50):
                 st.insert_event_with_outbox(_event(i))

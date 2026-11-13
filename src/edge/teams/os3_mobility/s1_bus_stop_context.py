@@ -46,7 +46,7 @@ def run(ticks=300, seed=42):
     rng = random.Random(seed)
     base = time.time()
     ped_bus, ped_other = [], []
-    with tempfile.TemporaryDirectory() as tmp:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         db = Storage(os.path.join(tmp, "os3_s1.db"), SCHEMA)
         for t in range(ticks):
             bus_here = (t % 40) < 5                       # simulated timing

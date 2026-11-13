@@ -56,7 +56,7 @@ def run():
     def check(name, cond):
         checks.append((name, bool(cond)))
 
-    with tempfile.TemporaryDirectory() as tmp:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         st = Storage(os.path.join(tmp, "os4_mist.db"), cfg["paths"]["schema"])
         relay, states, statuses, latencies = MistRelay(), [], [], []
         for i, pm in enumerate(PM25):

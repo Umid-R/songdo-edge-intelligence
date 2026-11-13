@@ -75,7 +75,7 @@ class TestStopFlag(unittest.TestCase):
 
 class TestStorage(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory()
+        self.tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.s = Storage(os.path.join(self.tmp.name, "t.db"), SCHEMA)
 
     def tearDown(self):
@@ -136,9 +136,10 @@ class TestDecision(unittest.TestCase):
         self.assertEqual(dispatch(d, now_mono=115.1), "EXPIRED")
 
 
+@unittest.skipUnless(sys.platform.startswith("linux") or sys.platform == "darwin", "needs AF_UNIX sockets")
 class TestUnixSocket(unittest.TestCase):
     def test_roundtrip(self):
-        with tempfile.TemporaryDirectory() as t:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as t:
             path = os.path.join(t, "s.sock")
             srv = UnixSocketServer(path, lambda m: {"echo": m})
             srv.start()

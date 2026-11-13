@@ -80,7 +80,7 @@ def run(n_procs=4, per=25):
     """Returns (ok, report_lines)."""
     ctx = mp.get_context("spawn")
     total = n_procs * per
-    with tempfile.TemporaryDirectory() as tmp:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         path = os.path.join(tmp, "os3_s4.db")
         st = Storage(path, SCHEMA)
         ensure_table(st)

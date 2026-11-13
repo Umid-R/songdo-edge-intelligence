@@ -36,8 +36,11 @@ class EdgeDecision:
     issued_mono: float            # time.monotonic() when the command was issued
     expires_mono: float           # issued_mono + ttl
     decision_id: str = field(default_factory=new_id)
-    status: str = "PENDING"       # PENDING | DISPATCHED | EXPIRED
+    status: str = "PENDING"       # PENDING | DISPATCHED | EXPIRED | SUPERSEDED
     created_at: float = field(default_factory=time.time)
+    rule_version: Optional[str] = None   # hash of the rule that produced this command
+    boot_epoch: Optional[str] = None     # monotonic-clock epoch (kernel boot id) it was issued in
+    seq: Optional[int] = None            # actuator sequence number, assigned at commit
 
     def is_fresh(self, now_mono=None):
         """A command is stale once the monotonic clock passes expires_mono."""

@@ -39,7 +39,7 @@ def run(event_count=120, batch_size=25, db_path=None):
     """Run a fast outage/recovery simulation; return (ok, report_lines)."""
     if event_count < 1 or batch_size < 1:
         raise ValueError("event_count and batch_size must be positive")
-    temp_dir = tempfile.TemporaryDirectory() if db_path is None else None
+    temp_dir = tempfile.TemporaryDirectory(ignore_cleanup_errors=True) if db_path is None else None
     try:
         path = db_path or os.path.join(temp_dir.name, "os1_s5.db")
         db = Storage(path, str(SCHEMA))
@@ -96,7 +96,7 @@ def run_live(online_s=2.0, outage_s=5.0, restored_s=2.0):
               ("restored", int(round(restored_s / PERIOD_S)))]
     per = {n: {"ticks": 0, "spikes": 0, "decisions": 0, "dispatched": 0} for n, _ in phases}
     snap, stamps = {}, []
-    with tempfile.TemporaryDirectory() as tmp:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         db = Storage(os.path.join(tmp, "os1_live.db"), str(SCHEMA))
         db.set_wan_online(True)
         stop = threading.Event()

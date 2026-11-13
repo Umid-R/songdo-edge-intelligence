@@ -33,6 +33,11 @@ supervisor:
   window_s: 60
   restart_delay_s: 0.5
 
+upstream:                       # independent receiver process + database (mock Urban Data Platform)
+  enabled: true                 # SyncWorker drains the outbox to it over HTTP, per-event ACKs
+  host: 127.0.0.1
+  port: 9100                    # its database: <db>_upstream.db (paths.upstream_db to override)
+
 sync:
   batch_size: 50
   interval_s: 1.0

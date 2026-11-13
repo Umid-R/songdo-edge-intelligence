@@ -30,11 +30,12 @@ def call(port, path, method="GET"):
 
 class TestOfflineDemo(unittest.TestCase):
     def test_wan_cut_and_restore(self):
-        with tempfile.TemporaryDirectory() as tmp:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
             with open(os.path.join(ROOT, "config", "node.yaml"), encoding="utf-8") as f:
                 cfg = yaml.safe_load(f)
             port = free_port()
             cfg["network"]["api_port"] = port
+            cfg["upstream"]["port"] = free_port()
             cfg["sensor"]["interval_s"] = 0.1
             cfg["paths"] = {
                 "db": os.path.join(tmp, "t.db"), "backups": os.path.join(tmp, "bk"),
@@ -69,12 +70,24 @@ class TestOfflineDemo(unittest.TestCase):
                 time.sleep(3)
                 back = call(port, "/api/status")
                 self.assertTrue(back["wan_online"])
+                self.assertTrue(back["receiver"]["reachable"])           # separate receiver process
                 self.assertLess(back["outbox_pending"], offline["outbox_pending"])
+                self.assertTrue(back["conservation"]["conserved"], back["conservation"])
+                rec = call(port, "/api/reconcile")                       # ID sets, both sides
+                self.assertEqual(rec["acked_but_not_at_receiver"], 0, rec)
+                self.assertEqual(rec["at_receiver_unknown_to_node"], 0, rec)
+                self.assertEqual(rec["admitted_not_committed"] <= 2, True, rec)  # in flight only
             finally:
                 proc.wait(timeout=30)
             self.assertEqual(proc.returncode, 0)                      # clean exit
-            report = Storage(cfg["paths"]["db"], cfg["paths"]["schema"], init=False).conservation_report()
-            self.assertTrue(report["conserved"], report)              # zero lost events
+            st = Storage(cfg["paths"]["db"], cfg["paths"]["schema"], init=False)
+            rec = st.recovery_report()                               # clean stop: nothing left behind
+            self.assertEqual(rec["unprocessed"], 0, rec)
+            self.assertTrue(rec["ok"], rec)
+            ev = st.counts()["events"]
+            self.assertEqual(st.outbox_pending() + len(
+                st._read("SELECT 1 FROM outbox WHERE sent_at IS NOT NULL")), ev)  # zero lost events
+            st.close()
 
 
 if __name__ == "__main__":

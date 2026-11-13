@@ -95,7 +95,7 @@ def run():
     truth = window_means([(o, v) for _, o, _, v in stream])           # what really happened
     inversions = sum(1 for a, b in zip(arrival, arrival[1:]) if b[1] < a[1])
 
-    with tempfile.TemporaryDirectory() as tmp:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         st = Storage(os.path.join(tmp, "os4_time.db"), os.path.join(ROOT, "sql", "schema.sql"))
         windower = EventTimeWindower()
         for i, observed, received, value in arrival:                  # insert in ARRIVAL order

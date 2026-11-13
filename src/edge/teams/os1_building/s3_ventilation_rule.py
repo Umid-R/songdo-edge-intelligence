@@ -39,7 +39,7 @@ def dispatch_if_fresh(decision, now_mono=None):
 
 def run(co2_ppm=1200.0, db_path=None, now_mono=None):
     """Persist a sensor event and any resulting decision, then simulate dispatch."""
-    temp_dir = tempfile.TemporaryDirectory() if db_path is None else None
+    temp_dir = tempfile.TemporaryDirectory(ignore_cleanup_errors=True) if db_path is None else None
     try:
         path = db_path or os.path.join(temp_dir.name, "os1_s3.db")
         db = Storage(path, str(SCHEMA))

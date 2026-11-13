@@ -74,7 +74,7 @@ def run(duration=3.0):
     generated = 0
     sign_seen = set()
 
-    with tempfile.TemporaryDirectory() as tmp:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         st = Storage(os.path.join(tmp, "os3_s5.db"), cfg["paths"]["schema"])
 
         def sync_tick():

@@ -12,7 +12,7 @@ from edge.storage import Storage  # noqa: E402
 
 class TestS5WanOutage(unittest.TestCase):
     def test_events_queue_offline_and_drain_after_reconnect(self):
-        with tempfile.TemporaryDirectory() as tmp:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
             db_path = os.path.join(tmp, "test.db")
             ok, lines = m.run(event_count=37, batch_size=8, db_path=db_path)
             self.assertTrue(ok, "\n".join(lines))

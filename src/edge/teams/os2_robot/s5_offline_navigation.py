@@ -126,7 +126,7 @@ def run(online_s=3.0, offline_s=10.0, restored_s=5.0, track=None):
     _, _, prev_heading = path.pose(0.0)
     start_pose = path.pose(0.0)
 
-    with tempfile.TemporaryDirectory() as tmp:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         st = Storage(os.path.join(tmp, "os2_nav.db"), cfg["paths"]["schema"])
         st.set_wan_online(True)
         stop = threading.Event()

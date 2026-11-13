@@ -30,7 +30,7 @@ def run(n_events=400, interval_s=0.01, kills=3):
     cfg = load_config(os.path.join(c.ROOT, "config", "os5.yaml"))
     ctx = mp.get_context("spawn")
     stop = StopFlag(ctx)
-    with tempfile.TemporaryDirectory() as tmp:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         db = os.path.join(tmp, "os5_kill.db")
         st = Storage(db, cfg["paths"]["schema"])
         c.init_inbox(st)

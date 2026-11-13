@@ -87,7 +87,7 @@ def run():
     def check(name, cond):
         checks.append((name, bool(cond)))
 
-    with tempfile.TemporaryDirectory() as tmp:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         st = Storage(os.path.join(tmp, "os2_estop.db"), cfg["paths"]["schema"])
         submitted = 0
 

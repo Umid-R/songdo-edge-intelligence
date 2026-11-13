@@ -71,7 +71,7 @@ def run():
     ctx = mp.get_context("spawn")
     stop, dep_ok = StopFlag(ctx), ctx.RawValue("i", 1)
     history = []
-    with tempfile.TemporaryDirectory() as tmp:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         schema = os.path.join(ROOT, "sql", "schema.sql")
         db = os.path.join(tmp, "os5_health.db")
         st = Storage(db, schema)

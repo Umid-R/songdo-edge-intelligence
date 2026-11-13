@@ -11,13 +11,20 @@ drains its durable outbox with zero lost events. Five themes (OS1–OS5) × 5 sc
 all on one shared core. Python standard library plus `pyyaml` (and `psutil`, used only as a fallback
 outside Linux).
 
-**At a glance (all on one team machine, see [Results](#results)):** 25/25 scenarios pass · 87/87 unit
+**Final term (what changed since the midterm assessment):** see [Final-term changes](#final-term-changes)
+: the Processor's crash window is closed (durable ingress, one-transaction commit, replayable command
+intents with receipts), the outbox drains to an **independent receiver process** over HTTP with
+per-event ACKs and G = C = A = R reconciliation, and **one offline web console runs all 25 tasks**
+(any task, any profile, cancel, live log, JSON evidence) through the same registry as the CLI.
+
+**At a glance at the midterm (all on one team machine, see [Results](#results)):** 25/25 scenarios pass · 87/87 unit
 tests pass · four 10-minute WAN outages with **zero lost and zero duplicated events** · systemd restarts the node 2 s after a SIGKILL · the Docker container runs healthy · the robot stopped
 for **162/162** obstacles while offline · the live dashboard keeps *Conserved: yes* through a cut and restore.
 
 ---
 
 ## Contents
+0. [Final-term changes](#final-term-changes)
 1. [Quickstart](#quickstart-the-course-readmes-five-steps)
 2. [How it works](#how-it-works)
 3. [Teams and their 25 scenarios](#teams-and-their-25-scenarios)
@@ -45,22 +52,38 @@ bash scripts/setup.sh
 #         deadlock timeout recovery, online backup integrity)
 python3 tests/test_os_fundamentals.py
 
-# Step 4: all 25 scenarios (about 2 minutes); --theme os2 for one theme, --only s5 for one scenario number
+# Step 4: all 25 scenarios (about 2 minutes); --theme os2 for one theme, --only s5 or --only OS2-5 for one task,
+#         --profile outage600 for the 10-minute runs, --list for the registry
 python3 scenarios/run_all_scenarios.py
 
-# Step 5: signature offline demo + local web console
-bash scripts/start_demo.sh OS1         # dashboard: http://127.0.0.1:8001 (the port is printed on start)
+# Step 5: signature offline demo + integrated web console (node + all 25 tasks)
+bash scripts/start_demo.sh OS1         # console: http://127.0.0.1:8001 (the port is printed on start)
 ```
 
-In the dashboard: live PIDs, CPU %, RSS memory and ingested events. **Simulate WAN Internet Cut** →
-the badge shows OFFLINE, events and local decisions continue, *Outbox queued* grows.
-**Restore WAN Connection** → the backlog drains, *Conserved* stays `yes`. Stop with **Ctrl+C**.
+The console has three tabs:
+- **Scenarios (25 tasks):** every official task OS1-1 … OS5-5, grouped by theme. Pick a profile
+  (*Standard check*, *WAN cut 60 s*, *WAN cut 600 s (handbook)*) and press **Run**, or **Run all 25** / per
+  theme. The run panel shows state, elapsed time against the budget, CPU / RSS of the scenario process,
+  the verdict, failed checks and the live log; **Cancel run** stops the scenario and all its children;
+  **Export evidence JSON** downloads the run's evidence.
+- **Live node:** live PIDs, CPU %, RSS and context switches of every process, WAN state, the receiver
+  process, queue pressure, actuator state and command intents, the recovery exit rule and
+  **Reconcile now** (generated / committed / acknowledged / receiver ID sets).
+  **Simulate WAN Internet Cut** → events and local decisions continue, *Outbox queued* grows, the
+  receiver gets nothing. **Restore WAN Connection** → the backlog drains, *Conserved* stays `yes`.
+- **Run history:** every run and batch of the session with its evidence file and manifest.
+
+Stop with **Ctrl+C** (running scenarios are cancelled, no process is left behind).
 
 Ports: `start_demo.sh` with no theme (config/node.yaml) and the Docker image use **8000**; the
 theme nodes use **8001–8005** (OS1–OS5) so all five can run at the same time without colliding.
 
-More tests: `PYTHONPATH=src python3 -m unittest discover -s tests -v` (all unit + scenario tests),
+More tests: `PYTHONPATH=src python3 -m unittest discover -s tests -v` (all unit, scenario and T1–T5 tests),
 `python3 integration/test_mock_upstream.py` (outbox → HTTP → mock upstream across a WAN cut).
+
+**Run bundle (evidence for the grader):** `python3 scripts/make_run_bundle.py --node-outage 600 --long`
+on an idle Ubuntu machine (~1 h; without the flags ~8 min). **Submission ZIP (code only):**
+`bash scripts/make_submission_zip.sh TeamA`.
 
 **The signature 10-minute WAN outage** (one per theme that has it; run one at a time on an idle machine):
 ```bash
@@ -73,12 +96,78 @@ PYTHONPATH=src .venv/bin/python -m edge.teams.os5_reliable.s5_compound_failure -
 
 ---
 
+## Final-term changes
+
+The midterm assessment (13.75 / 15) named three gaps. Each is closed in code and covered by a test
+from the assessment's verification matrix.
+
+### 1. Crash boundary of the Processor (P0: OS2-4, OS5-2, OS5-5)
+Midterm: the Processor took an event off the queue, then committed it, then inserted the decision,
+then dispatched it — four separate steps, so a SIGKILL between them could lose an event, leave a
+committed event without its command, or leave an applied command without a record.
+
+Now (`src/edge/workers.py`, `storage.py`, `decision.py`):
+1. **Durable admission.** SensorGen writes every reading to the `ingress` table *before* it is queued.
+2. **One transaction.** The Processor commits the event, its outbox row, every command intent
+   (status PENDING, with an actuator sequence number) and "ingress processed" **together**.
+3. **Deterministic decision IDs** = hash(event_id, rule, rule version), so processing an event twice
+   cannot create a second command.
+4. **Apply with guards.** A PENDING intent is applied only in the boot epoch that issued it (kernel
+   `boot_id`), inside its TTL on the monotonic clock and above the actuator's last applied sequence;
+   otherwise it becomes EXPIRED or SUPERSEDED. The simulated actuator state, the receipt and status
+   DISPATCHED are committed in one transaction. A replayed old reading is issued already aged.
+5. **Recovery.** A restarted Processor replays unprocessed ingress rows and PENDING intents; a periodic
+   sweep commits readings dropped from the full in-memory queue.
+
+Exit rule (`Storage.recovery_report()`, shown live in the console): every admitted event and every
+intent has exactly one durable disposition, and receipts = dispatched commands.
+
+### 2. Independent receiver and ID reconciliation (P1: OS1-5, OS3-5, OS4-5)
+Midterm: "delivery" copied rows into a table of the node's own database in the same transaction.
+Now the supervisor starts the receiver (`src/edge/upstream.py`) as its **own process with its own SQLite
+file**; the SyncWorker POSTs batches over HTTP. The receiver commits before it replies and ACKs event
+IDs one by one; the node marks a row sent only if *its own* ID is ACKed (unrelated ACKs are ignored and
+counted). `/api/reconcile` compares G (admitted), C (committed), A (marked sent) and R (stored at the
+receiver): no false "sent" (A − R = ∅), no unknown IDs (R − C = ∅), and after a drain G = C = A = R.
+`POST /fault` on the receiver injects a lost ACK after commit or an unrelated ACK.
+
+### 3. One offline console for all 25 tasks (U1, U2)
+- **U1 registry** (`src/edge/registry.py`): explicit ID → module map for OS1-1 … OS5-5 with fixed
+  profiles. `scenario_command()` is the only way a run becomes a command line; requests name an ID and a
+  profile, never a module path or command text. CLI and console both use it.
+- **U2 run isolation and evidence** (`src/edge/runner.py`): each run has its own run ID, directory,
+  TMPDIR (so a fresh database and socket namespace), seed and process group; timeout and cancel stop the
+  whole group; logs are bounded; CPU / RSS telemetry is sampled; every run writes
+  `results/runs/<run_id>/evidence.json` (argv, exit code, verdict, checks, timing, source hash, platform)
+  and every batch a manifest for UI / CLI parity.
+
+### Verification matrix (assessment p. 5) → tests
+| Test | What it does | Where |
+|---|---|---|
+| T1 | Kill the Processor after dequeue, after commit, after apply (real `os._exit(137)`), restart | `tests/test_crash_recovery.py` |
+| T2 | Drop the ACK after the receiver committed, resend; return an unrelated ACK; kill the receiver | `tests/test_receiver.py` |
+| T3 | 0.8 m boundary and 500 ms TTL under load, monotonic tick gaps | OS2-3, OS2-5 (`tests/os2/`) |
+| T4 | Invalid ID / profile, duplicate launch, timeout, cancel (grandchild killed), bounded logs | `tests/test_runner_api.py` |
+| T5 | Same argv and verdicts from the CLI and console paths | `tests/test_runner_api.py`, full 25/25 in the run bundle |
+| Node | Integrated outage: WAN cut, Processor SIGKILL mid-cut, restore, frozen generation, G = C = A = R | `scripts/make_run_bundle.py --node-outage 600` |
+
+### Platforms
+Target: Ubuntu 24.04 + Python 3.12. Every module now imports on any OS (the midterm `os.sysconf` at
+import time stopped collection on Windows). Nine tasks use Linux kernel features on purpose (OS1-4,
+OS2-1, OS2-4, OS4-1, OS4-4, OS5-1, OS5-2, OS5-3, OS5-5: /proc, AF_UNIX, SIGKILL/SIGCHLD, flock, epoll on
+pipes); off Linux they are reported **SKIPPED with the reason**, not failed.
+
+---
+
 ## How it works
 
 ```
-SensorGen --(BoundedQueue 500, drop_oldest)--> Processor --> SQLite WAL (events + outbox in ONE transaction)
-HealthMon (/proc -> process_health)                 |        decisions with monotonic TTL -> actuator
-API (http.server dashboard, /api/status, /api/wan/*)    SyncWorker (drains the outbox only while WAN is online)
+SensorGen --admit--> SQLite ingress
+    \--(BoundedQueue 500, drop_oldest)--> Processor --> ONE transaction: event + outbox + command intents
+                                              |           apply intent: epoch + TTL + sequence check,
+                                              |           actuator state + receipt in ONE transaction
+HealthMon (/proc -> process_health)           SyncWorker --HTTP, per-ID ACK--> Upstream (own process + DB)
+API (console: node status, reconcile, 25-task runner)
 Supervisor starts, monitors (SIGCHLD / wait), restarts and cleanly stops every process.
 ```
 
@@ -92,8 +181,9 @@ Supervisor starts, monitors (SIGCHLD / wait), restarts and cleanly stops every p
 - **Commands expire.** Each actuator command carries an expiry time on the monotonic clock
   (`issued + TTL`), so a command that arrives late is rejected instead of acting on old information.
 - **Offline, then drain.** While the WAN flag is off, the outbox only grows. When it is back, the
-  `SyncWorker` drains it in batches; the receiver deduplicates by `event_id`, so a resend is never stored
-  twice. The *conservation* check (`events = delivered + pending`) proves nothing was lost.
+  `SyncWorker` sends it in batches to the receiver process; the receiver deduplicates by `event_id`, so a
+  resend is never stored twice, and the node marks only ACKed IDs as sent. Reconciliation of the ID sets
+  on both sides proves nothing was lost.
 - **Observable.** `HealthMon` samples `/proc/<pid>/stat` and `/proc/<pid>/status` (CPU, RSS, context
   switches) into `process_health`; the zero-dependency dashboard reads it through `/api/status`.
 
@@ -357,6 +447,8 @@ songdo-edge-intelligence/
 │   ├── setup.sh                   # environment initializer
 │   ├── start_demo.sh              # multi-process supervisor and web launcher
 │   ├── backup.sh                  # flocked online backup
+│   ├── make_run_bundle.py         # Linux run bundle: versions, hash, all tests, 25 x 2 runs, outage trace
+│   ├── make_submission_zip.sh     # code-only submission ZIP (no execution files, no external links)
 │   └── generate_os2_sim_data.py   # OS2 SAMPLE path + SIMULATED LiDAR trace (seed 2026)
 ├── sources/
 │   └── source_registry.csv        # Korean open data registry and what is REAL / SAMPLE / SIMULATED
@@ -364,7 +456,10 @@ songdo-edge-intelligence/
 │   └── schema.sql                 # SQLite DDL (WAL, events, decisions, outbox, sink, health)
 ├── src/
 │   ├── edge/
-│   │   ├── api_server.py          # zero-dependency local HTTP API server
+│   │   ├── api_server.py          # zero-dependency local HTTP API server (node + 25-task runner)
+│   │   ├── registry.py            # the 25 official tasks: ID -> module + run profiles (CLI and UI)
+│   │   ├── runner.py              # isolated runs: process group, cancel, timeout, evidence.json
+│   │   ├── upstream.py            # independent receiver process + per-ID ACK sender + reconcile
 │   │   ├── decision.py            # local rule engine, monotonic-clock command TTL
 │   │   ├── ipc.py                 # BoundedQueue (500, drop_oldest), Unix socket, StopFlag
 │   │   ├── models.py              # SensorEvent, EdgeDecision, ProcessHealth
@@ -432,6 +527,9 @@ vmstat 1 5                                                  # context switches, 
 | systemd unit with burst limits + resource limits, flocked backups, container healthcheck | `systemd/`, `scripts/backup.sh`, `container/` | Results §7 |
 | 10-minute WAN disconnect, event conservation, idempotent receiver dedup | OS1-5 (`--outage 600`), OS2-5 (`--offline 600`), OS3-5 (`--duration 600`), OS5-5 (`--cut 600`), OS4-5; `integration/` | Results §5 |
 | Zero-dependency dashboard with PIDs, CPU/RAM, outbox | `src/ui/static/index.html`, `src/edge/api_server.py` | Results §6 |
+| Integrated UI to run any task / sub-task (final-term requirement) | `src/edge/registry.py`, `runner.py`, console *Scenarios* tab | `tests/test_runner_api.py` |
+| Crash-safe processing (assessment P0) | `workers.py`, `storage.py` (`commit_event`, `apply_intent`) | `tests/test_crash_recovery.py` |
+| Independent receiver + ID reconciliation (assessment P1) | `src/edge/upstream.py`, `/api/reconcile` | `tests/test_receiver.py`, run bundle |
 | Grounded data with honest labels | `sources/source_registry.csv` | — |
 
 ---
@@ -442,7 +540,12 @@ vmstat 1 5                                                  # context switches, 
 - **OS2-5 timing (fixed):** before the storage fix (PR #8: one cached SQLite connection per thread instead of a new one per write) the "longest gap between ticks < 300 ms" check failed on busy team machines (312–404 ms). After the fix: 137 ms on the test machine and **89 ms** on the team machine (Results §5).
 - **ResourceWarning:** the unit tests print harmless `unclosed database` warnings on Python 3.14 (Results §2).
 - **Container:** the image was built and run healthy with `docker run`; the `docker compose` variant (with the 1 CPU / 512 MB limits) was not run separately.
-- The scenarios are separate programs; `start_demo.sh <theme>` runs the shared node, not the scenarios.
+- The scenarios are still separate programs (each one sets up its own situation), but they are now
+  launched, isolated, cancelled and recorded from the same console as the node; the crash-safe intent
+  path and the HTTP receiver are implemented in the shared node, while scenario programs keep their own
+  local models of those mechanisms.
+- **Final-term evidence still to capture on Ubuntu 24.04:** the 600 s profiles and the integrated
+  `--node-outage 600` run (`scripts/make_run_bundle.py`); this session verified them with 40–60 s cuts.
 - **OS3:** the scripts `build_bus_stops.py` and `os3_live_demo.py` mentioned by the OS3 team are not in the repo.
 
 ## Git workflow

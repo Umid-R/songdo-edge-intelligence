@@ -99,7 +99,7 @@ def run():
     cfg = load_config(os.path.join(ROOT, "config", "os4.yaml"))
     events = gen_events(cfg["node"]["id"])
     totals = {"new": 0, "dup": 0}
-    with tempfile.TemporaryDirectory() as tmp:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         st = Storage(os.path.join(tmp, "os4_drain.db"), cfg["paths"]["schema"])
         st.set_wan_online(True)
         snap = {}

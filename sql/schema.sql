@@ -56,3 +56,35 @@ CREATE TABLE IF NOT EXISTS kv (
   key   TEXT PRIMARY KEY,
   value TEXT NOT NULL
 );
+
+-- ---- Durable admission and command intents (final-term crash-window fix) ----
+-- SensorGen admits every reading here BEFORE it enters the in-memory queue, so an event taken
+-- off the queue by a Processor that is then SIGKILLed is not lost: the restarted Processor
+-- replays every row whose processed_at is still NULL.
+CREATE TABLE IF NOT EXISTS ingress (
+  event_id     TEXT PRIMARY KEY,
+  payload      TEXT NOT NULL,
+  admitted_at  REAL NOT NULL,
+  processed_at REAL               -- set in the SAME transaction that commits the event
+);
+CREATE INDEX IF NOT EXISTS idx_ingress_pending ON ingress(processed_at);
+
+-- Simulated actuator state (the "effect projection") and one receipt per applied command.
+-- Both are written in the same transaction that marks the decision DISPATCHED, so after a
+-- crash an applied command always has its receipt and is never applied twice.
+CREATE TABLE IF NOT EXISTS actuator_state (
+  actuator    TEXT PRIMARY KEY,
+  value       REAL,
+  last_seq    INTEGER NOT NULL,   -- only a command with a higher seq may change the state
+  decision_id TEXT,
+  boot_epoch  TEXT,
+  applied_at  REAL
+);
+
+CREATE TABLE IF NOT EXISTS actuator_receipts (
+  decision_id TEXT PRIMARY KEY,
+  actuator    TEXT NOT NULL,
+  value       REAL,
+  seq         INTEGER NOT NULL,
+  applied_at  REAL NOT NULL
+);

@@ -39,7 +39,7 @@ def run(n_events=240, interval_s=0.05, cut_s=3.0):
     ctx = mp.get_context("spawn")
     stop = StopFlag(ctx)
     sync_stop = threading.Event()
-    with tempfile.TemporaryDirectory() as tmp:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         db = os.path.join(tmp, "os5_compound.db")
         st = Storage(db, cfg["paths"]["schema"])
         c.init_inbox(st)
