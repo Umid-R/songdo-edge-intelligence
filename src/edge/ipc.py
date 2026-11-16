@@ -54,19 +54,38 @@ class BoundedQueue:
         self._lock = ctx.Lock()
         self._dropped = ctx.Value("q", 0)
 
-    def put(self, item):
-        with self._lock:
+    def put(self, item, give_up_s=1.0):
+        """Put item; when full, drop the oldest. Returns False if the item itself was dropped.
+
+        Never spins forever: if the oldest item cannot be removed within give_up_s (a reader that
+        was SIGKILLed while waiting still holds the queue's internal read lock), the NEW item is
+        dropped and counted instead. The shared node admits every reading to the durable ingress
+        table before queueing it, so the Processor's sweep still commits it.
+        """
+        deadline = time.monotonic() + give_up_s
+        if not self._lock.acquire(timeout=give_up_s):
+            self._count_drop()
+            return False
+        try:
             while True:
                 try:
                     self._q.put_nowait(item)
-                    return
+                    return True
                 except queue.Full:
                     try:
                         self._q.get_nowait()          # drop the oldest
-                        with self._dropped.get_lock():
-                            self._dropped.value += 1
+                        self._count_drop()
                     except queue.Empty:
+                        if time.monotonic() >= deadline:
+                            self._count_drop()        # poisoned queue: drop the new item
+                            return False
                         time.sleep(0.001)             # feeder thread still flushing
+        finally:
+            self._lock.release()
+
+    def _count_drop(self):
+        with self._dropped.get_lock():
+            self._dropped.value += 1
 
     def get(self, timeout=None):
         return self._q.get(timeout=timeout)           # raises queue.Empty

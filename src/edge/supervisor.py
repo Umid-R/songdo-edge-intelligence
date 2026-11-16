@@ -23,6 +23,9 @@ from edge.workers import health_main, processor_main, sensor_gen_main
 log = logging.getLogger("supervisor")
 
 
+QUEUE_ENDS = ("SensorGen", "Processor")     # the two processes that share the BoundedQueue
+
+
 class Supervisor:
     def __init__(self, cfg):
         self.cfg = cfg
@@ -33,6 +36,7 @@ class Supervisor:
         self.restarts = {}
         self._restart_times = {}
         self._stopping = False
+        self.queue_resets = 0
 
     def _specs(self):
         c, q, s = self.cfg, self.queue, self.stop_event
@@ -58,7 +62,7 @@ class Supervisor:
         log.info("started %s pid=%s", name, p.pid)
 
     def _write_pidfile(self):
-        data = {"Supervisor": {"pid": os.getpid(), "restarts": 0}}
+        data = {"Supervisor": {"pid": os.getpid(), "restarts": 0, "queue_resets": self.queue_resets}}
         for name, p in self.procs.items():
             data[name] = {"pid": p.pid, "restarts": self.restarts.get(name, 0)}
         path = self.cfg["paths"]["pidfile"]
@@ -93,7 +97,31 @@ class Supervisor:
             time.sleep(sup["restart_delay_s"])
             times.append(now)
             self.restarts[name] += 1
+            if name in QUEUE_ENDS and p.exitcode != 0:
+                self._reset_queue(name)
             self._spawn(name)
+
+    def _reset_queue(self, died):
+        """A queue end died abnormally: replace the queue and restart the other end on it.
+
+        A multiprocessing.Queue reader holds the queue's internal read lock while it waits for data;
+        if it is SIGKILLed in that wait the lock is never released, so no later reader can take an
+        item and the queue is unusable. The old queue is abandoned rather than repaired. Its
+        contents are not lost: every reading was admitted to the durable ingress table first, and
+        the Processor commits unprocessed ingress rows at start and in its periodic sweep."""
+        other = "Processor" if died == "SensorGen" else "SensorGen"
+        self.queue = BoundedQueue(self.cfg["ipc"]["queue_maxsize"], self.ctx)
+        self.queue_resets += 1
+        op = self.procs.get(other)
+        if op is not None and op.is_alive():
+            op.terminate()                 # SIGTERM; a Processor mid-transaction rolls back
+            op.join(5)
+            if op.is_alive():
+                op.kill()
+                op.join(2)
+            self._spawn(other)
+        log.warning("queue replaced after %s died (reset #%d); %s restarted on the new queue",
+                    died, self.queue_resets, other)
 
     def run(self, duration=0):
         signal.signal(signal.SIGTERM, self._on_signal)
@@ -118,7 +146,7 @@ class Supervisor:
         self.stop_event.set()
         if "SensorGen" in self.procs:                 # stop the producer first
             self.procs["SensorGen"].join(5)
-        self.queue.put(STOP)
+        self.queue.put(STOP)                          # bounded: never hangs on a broken queue
         for name, p in self.procs.items():
             p.join(5)
             if p.is_alive():

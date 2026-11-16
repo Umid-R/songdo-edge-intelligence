@@ -152,6 +152,8 @@ def health_main(cfg, stop):
         except (FileNotFoundError, ValueError):
             pids = {}
         for name, info in pids.items():
+            if not isinstance(info, dict) or "pid" not in info:
+                continue                                  # not a process entry
             m = sampler.sample(info["pid"])
             if m is None:
                 continue
