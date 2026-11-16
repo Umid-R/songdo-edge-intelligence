@@ -2,8 +2,9 @@
 
 Every run gets
     - a run ID and its own directory results/runs/<run_id>/ (log, evidence.json, artifacts)
-    - its own TMPDIR inside that directory: every scenario creates its SQLite databases and Unix
-      sockets with tempfile, so each run has a fresh database and socket namespace
+    - its own TMPDIR (a fresh /tmp/songdo-<id>-XXXX folder, short so Unix socket paths stay under
+      the 108-byte limit): every scenario creates its SQLite databases and Unix sockets with
+      tempfile, so each run has a fresh database and socket namespace
     - a recorded seed (PYTHONHASHSEED and SONGDO_SEED)
     - its own process group, so cancel / timeout stop the scenario AND every child it started
     - a bounded in-memory log (last MAX_LINES lines) and a log file capped at MAX_LOG_BYTES
@@ -23,6 +24,7 @@ import signal
 import sqlite3
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import uuid
@@ -32,6 +34,9 @@ from edge import registry as reg
 MAX_LINES = 4000              # in memory, per run
 MAX_LOG_BYTES = 5_000_000     # on disk, per run
 MAX_PARALLEL = 2              # standard runs at the same time (exclusive profiles run alone)
+# Each run's TMPDIR lives under a SHORT base, not inside results/runs/<run_id>/: a Unix domain socket
+# path may be at most 108 bytes on Linux (sun_path), and scenarios create their sockets in TMPDIR.
+RUN_TMP_BASE = os.environ.get("SONGDO_RUN_TMP") or ("/tmp" if os.name == "posix" else tempfile.gettempdir())
 TERMINAL = ("passed", "failed", "timeout", "cancelled", "error", "skipped")
 IS_LINUX = sys.platform.startswith("linux")
 
@@ -106,6 +111,7 @@ class Run:
         self.run_id, self.scenario, self.profile = run_id, scenario, profile
         self.argv, self.timeout_s, self.run_dir, self.seed = argv, timeout_s, run_dir, seed
         self.batch_id = batch_id
+        self.tmp_dir = None
         self.state = "queued"
         self.created_at = _now_iso()
         self.started_at = self.ended_at = None
@@ -196,9 +202,10 @@ class RunManager:
                     raise RuntimeError("the 600 s profile runs alone: wait for the active runs to finish")
                 if any(r.profile.exclusive for r in active):
                     raise RuntimeError("a 600 s run is in progress: it runs alone")
-            os.makedirs(os.path.join(run_dir, "tmp"), exist_ok=True)
+            os.makedirs(run_dir, exist_ok=True)
             run = Run(run_id, self.registry[scenario_id], prof, argv, timeout_s, run_dir,
                       seed=random.SystemRandom().randrange(1, 2**31), batch_id=batch_id)
+            run.tmp_dir = tempfile.mkdtemp(prefix=f"songdo-{run_id[-6:]}-", dir=RUN_TMP_BASE)
             self.runs[run_id] = run
             while len(self.runs) > 500:                       # bounded history in memory
                 old = next(iter(self.runs))
@@ -259,7 +266,7 @@ class RunManager:
 
     # ---- execution ----
     def _env(self, run):
-        tmp = os.path.join(run.run_dir, "tmp")
+        tmp = run.tmp_dir
         pp = os.pathsep.join([os.path.join(self.root, "src"), *self.extra_pythonpath])
         env = dict(os.environ, PYTHONPATH=pp, PYTHONUNBUFFERED="1", PYTHONHASHSEED=str(run.seed),
                    SONGDO_RUN_ID=run.run_id, SONGDO_SEED=str(run.seed), SONGDO_RUN_DIR=run.run_dir,
@@ -302,10 +309,15 @@ class RunManager:
         log_path = os.path.join(run.run_dir, "output.log")
         run.started_at, run._t0 = _now_iso(), time.monotonic()
         run.state = "running"
-        run.proc = subprocess.Popen(run.argv, cwd=self.root, env=self._env(run), stdout=subprocess.PIPE,
-                                    stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, **kwargs)
-        if os.name == "posix":
-            run.pgid = os.getpgid(run.proc.pid)
+        proc = subprocess.Popen(run.argv, cwd=self.root, env=self._env(run), stdout=subprocess.PIPE,
+                                stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, **kwargs)
+        with run.lock:
+            run.proc = proc
+            if os.name == "posix":
+                run.pgid = os.getpgid(proc.pid)        # == proc.pid (new session), valid until reaped
+            cancelled_early = run.cancel_requested
+        if cancelled_early:                            # Cancel arrived while the process was starting
+            self._kill_group(run)
         tele = threading.Thread(target=self._sample, args=(run,), daemon=True)
         tele.start()
         reader = threading.Thread(target=self._read_output, args=(run, log_path, echo), daemon=True)
@@ -400,12 +412,15 @@ class RunManager:
         run = self.get(run_id)
         if run.state in TERMINAL:
             return run
-        run.cancel_requested = True
+        with run.lock:
+            run.cancel_requested = True
+            started = run.proc is not None
         if run.batch_id and run.batch_id in self.batches:
             self.batches[run.batch_id]["cancelled"] = True
         if run.state == "running":
             run.state = "cancelled"
-            self._kill_group(run)
+            if started:                                # else the spawner kills it right after Popen
+                self._kill_group(run)
         return run
 
     def cancel_all(self, wait=10):
@@ -439,8 +454,6 @@ class RunManager:
         lines = list(run.lines)
         artifacts = []
         for dirpath, _, files in os.walk(run.run_dir):
-            if os.path.basename(dirpath) == "tmp" or os.sep + "tmp" + os.sep in dirpath + os.sep:
-                continue
             for f in files:
                 if f != "evidence.json":
                     p = os.path.join(dirpath, f)
@@ -454,7 +467,7 @@ class RunManager:
                         "timeout_s": run.timeout_s, "outage_s": run.profile.outage_s},
             "invocation": {"argv": [os.path.basename(run.argv[0])] + run.argv[1:],
                            "python_executable": run.argv[0], "cwd": self.root,
-                           "env": {"PYTHONPATH": "src", "TMPDIR": "<run_dir>/tmp",
+                           "env": {"PYTHONPATH": "src", "TMPDIR": run.tmp_dir,
                                    "PYTHONHASHSEED": str(run.seed), "SONGDO_RUN_ID": run.run_id}},
             "seed": run.seed,
             "state": run.state, "exit_code": run.exit_code,
@@ -478,7 +491,8 @@ class RunManager:
 
     def _finish(self, run):
         try:
-            shutil.rmtree(os.path.join(run.run_dir, "tmp"), ignore_errors=True)   # fresh DBs are per run
+            if run.tmp_dir:
+                shutil.rmtree(run.tmp_dir, ignore_errors=True)    # fresh DBs / sockets are per run
             with open(os.path.join(run.run_dir, "evidence.json"), "w", encoding="utf-8") as f:
                 json.dump(self.evidence(run), f, indent=2)
         except OSError as e:
