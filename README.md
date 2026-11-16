@@ -58,10 +58,12 @@ python3 scenarios/run_all_scenarios.py
 
 # Step 5: signature offline demo + integrated web console (node + all 25 tasks)
 bash scripts/start_demo.sh OS1         # console: http://127.0.0.1:8001 (the port is printed on start)
+                                       # add --fresh for a clean demo (deletes that node's databases first)
 ```
 
 The console has three tabs:
-- **Scenarios (25 tasks):** every official task OS1-1 … OS5-5, grouped by theme. Pick a profile
+- **Scenarios (25 tasks):** every official task OS1-1 … OS5-5, grouped by theme, plus **NODE-OUTAGE** (the
+  whole node + receiver through a WAN cut and a Processor SIGKILL, 60 s or 600 s). Pick a profile
   (*Standard check*, *WAN cut 60 s*, *WAN cut 600 s (handbook)*) and press **Run**, or **Run all 25** / per
   theme. The run panel shows state, elapsed time against the budget, CPU / RSS of the scenario process,
   the verdict, failed checks and the live log; **Cancel run** stops the scenario and all its children;
@@ -138,18 +140,19 @@ receiver): no false "sent" (A − R = ∅), no unknown IDs (R − C = ∅), and 
 - **U2 run isolation and evidence** (`src/edge/runner.py`): each run has its own run ID, directory,
   TMPDIR (so a fresh database and socket namespace), seed and process group; timeout and cancel stop the
   whole group; logs are bounded; CPU / RSS telemetry is sampled; every run writes
-  `results/runs/<run_id>/evidence.json` (argv, exit code, verdict, checks, timing, source hash, platform)
+  `results/runs/<run_id>/evidence.json` (argv, exit code, verdict, checks, timing, source hash, platform,
+  the fixture data the task runs on and the fault it injects)
   and every batch a manifest for UI / CLI parity.
 
 ### Verification matrix (assessment p. 5) → tests
-| Test | What it does | Where |
-|---|---|---|
-| T1 | Kill the Processor after dequeue, after commit, after apply (real `os._exit(137)`), restart | `tests/test_crash_recovery.py` |
-| T2 | Drop the ACK after the receiver committed, resend; return an unrelated ACK; kill the receiver | `tests/test_receiver.py` |
-| T3 | 0.8 m boundary and 500 ms TTL under load, monotonic tick gaps | OS2-3, OS2-5 (`tests/os2/`) |
-| T4 | Invalid ID / profile, duplicate launch, timeout, cancel (grandchild killed), bounded logs | `tests/test_runner_api.py` |
-| T5 | Same argv and verdicts from the CLI and console paths | `tests/test_runner_api.py`, full 25/25 in the run bundle |
-| Node | Integrated outage: WAN cut, Processor SIGKILL mid-cut, restore, frozen generation, G = C = A = R | `scripts/make_run_bundle.py --node-outage 600` |
+| Test | What it does | Where | Retained evidence (in the run bundle) |
+|---|---|---|---|
+| T1 | Kill the Processor after dequeue, after commit, after apply (real `os._exit(137)`), restart | `tests/test_crash_recovery.py` | `test_evidence/T1_kill_<point>.json`: admitted / committed ID manifests + journal (ingress, intents, receipts) |
+| T2 | Drop the ACK after the receiver committed, resend; return an unrelated ACK; kill the receiver | `tests/test_receiver.py` | `test_evidence/T2_<case>.json`: every request and response across the receiver |
+| T3 | 0.8 m and 500 ms TTL boundaries on the shared node path while 3 processes write to the same SQLite file, 50 ms loop | `tests/test_t3_boundaries.py` | `test_evidence/T3_boundaries_under_contention.json`: monotonic trace, tick gaps, applied command age |
+| T4 | Invalid ID / profile, duplicate launch, timeout, cancel (grandchild killed) via runner and API, restart, bounded logs | `tests/test_runner_api.py` | `test_evidence/T4_api_transcript.json` |
+| T5 | Same argv and verdicts from the CLI and console paths | `tests/test_runner_api.py`, full 25/25 in the bundle | `manifests/*_cli.json`, `manifests/*_ui.json` |
+| Node | Integrated outage: WAN cut, Processor SIGKILL mid-cut, restore, frozen generation, G = C = A = R, API polled throughout | console task **NODE-OUTAGE** (`src/edge/node_outage.py`) | `runs/<run_id>/node_outage/` (trace.csv, node_outage.json) + evidence.json |
 
 ### Final-term run bundle (Linux evidence)
 `python3 scripts/make_run_bundle.py --node-outage 600 --long` on Ubuntu 26.04.1 LTS, Python 3.14.4
