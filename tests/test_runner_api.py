@@ -120,9 +120,21 @@ class TestRunManager(unittest.TestCase):
         a, b = self.mgr.run_sync("FAKE-1", "tmp"), self.mgr.run_sync("FAKE-1", "tmp")
         self.assertNotEqual(a.run_dir, b.run_dir)
         line = [ln for ln in a.lines if ln.startswith("tmp ")][0].split()
-        self.assertEqual(line[1], os.path.join(a.run_dir, "tmp"))       # scenario tempfiles land here
+        other = [ln for ln in b.lines if ln.startswith("tmp ")][0].split()
+        self.assertEqual(line[1], a.tmp_dir)                            # scenario tempfiles land here
+        self.assertNotEqual(line[1], other[1])                          # a fresh one per run
         self.assertEqual((line[2], line[3]), (a.run_id, str(a.seed)))
-        self.assertFalse(os.path.exists(os.path.join(a.run_dir, "tmp")))  # removed after the run
+        self.assertFalse(os.path.exists(a.tmp_dir))                     # removed after the run
+
+    def test_socket_paths_fit_even_with_a_deep_results_folder(self):
+        """Linux sun_path is 108 bytes; the run TMPDIR must not depend on the results path."""
+        deep = os.path.join(self.tmp.name, *(["very_long_results_folder_name"] * 6), "runs")
+        mgr = RunManager(ROOT, results_dir=deep, registry=fake_registry(), extra_pythonpath=[FIX],
+                         python=sys.executable)
+        run = mgr.run_sync("FAKE-1", "tmp")
+        self.assertEqual(run.state, "passed")
+        sock = os.path.join(run.tmp_dir, "tmpabcdefgh", "safety.sock")   # what OS2-1 creates
+        self.assertLess(len(sock.encode()), 108, sock)
 
     def test_duplicate_launch_rejected(self):
         run = self.mgr.start("FAKE-1", "slow")
