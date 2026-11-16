@@ -151,6 +151,29 @@ receiver): no false "sent" (A − R = ∅), no unknown IDs (R − C = ∅), and 
 | T5 | Same argv and verdicts from the CLI and console paths | `tests/test_runner_api.py`, full 25/25 in the run bundle |
 | Node | Integrated outage: WAN cut, Processor SIGKILL mid-cut, restore, frozen generation, G = C = A = R | `scripts/make_run_bundle.py --node-outage 600` |
 
+### Final-term run bundle (Linux evidence)
+`python3 scripts/make_run_bundle.py --node-outage 600 --long` on Ubuntu 26.04.1 LTS, Python 3.14.4
+(2026-11-16, ~56 min, commit `7b50101`; the bundle zip is submitted separately, not committed):
+
+| Step | Result |
+|---|---|
+| Preflight, OS fundamentals, unit + scenario + T1–T5 tests, receiver integration test | all exit 0 (115 tests) |
+| 25 scenarios, CLI path | 25 / 25 passed, 0 skipped |
+| 25 scenarios, console path | 25 / 25 passed; CLI vs console verdicts identical 25 / 25 |
+| Integrated node outage, 600 s WAN cut, Processor SIGKILLed at 300 s | 1,739 events: G = C = A = R = 1,739, 0 pending, 0 lost, receiver unchanged during the cut, receipts = dispatched (30) |
+| 600 s profiles OS1-5, OS2-5, OS3-5, OS5-5 | 4 / 4 passed (603–608 s each) |
+
+**Defect found by this run, and fixed.** The node-outage trace shows events growing ~4/s until about
+150 s after the Processor kill, then flat at 1,739 for the rest of the cut: no data was lost, but
+generation had stopped. Cause: a `multiprocessing.Queue` reader holds the queue's internal read lock
+while it waits; a reader SIGKILLed in that wait never releases it, so the restarted Processor could not
+read the queue (it kept committing through the ingress sweep), the queue filled up, and SensorGen's
+drop-oldest step spun forever on the same lock. Fix: the supervisor treats the queue as poisoned when
+either end dies abnormally, builds a new queue and restarts both ends on it (the old contents are in the
+durable ingress table); `BoundedQueue.put()` gives up after 1 s instead of spinning. Regression test:
+`tests/test_supervisor_queue_reset.py`; the bundle now also checks that generation is still growing in the
+last 30 s of the cut. A re-run of the 600 s node outage after the fix is in the final submission.
+
 ### Platforms
 Target: Ubuntu 24.04 + Python 3.12. Every module now imports on any OS (the midterm `os.sysconf` at
 import time stopped collection on Windows). Nine tasks use Linux kernel features on purpose (OS1-4,
@@ -544,8 +567,8 @@ vmstat 1 5                                                  # context switches, 
   launched, isolated, cancelled and recorded from the same console as the node; the crash-safe intent
   path and the HTTP receiver are implemented in the shared node, while scenario programs keep their own
   local models of those mechanisms.
-- **Final-term evidence still to capture on Ubuntu 24.04:** the 600 s profiles and the integrated
-  `--node-outage 600` run (`scripts/make_run_bundle.py`); this session verified them with 40–60 s cuts.
+- The final-term run bundle was captured on **Ubuntu 26.04.1 LTS, Python 3.14.4, kernel 7.0 (aarch64,
+  4 CPUs)**, not on the handbook's Ubuntu 24.04 / Python 3.12; all steps passed there.
 - **OS3:** the scripts `build_bus_stops.py` and `os3_live_demo.py` mentioned by the OS3 team are not in the repo.
 
 ## Git workflow
