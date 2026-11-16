@@ -118,6 +118,15 @@ def http(port, path, method="GET"):
         return json.loads(r.read())
 
 
+def _grew_until_end(samples, window_s):
+    """Events still increasing over the last window_s seconds of these samples."""
+    if len(samples) < 2:
+        return False
+    end = samples[-1]
+    start = next((t for t in samples if end["mono"] - t["mono"] <= window_s), samples[0])
+    return end["events"] > start["events"]
+
+
 def node_outage(out, outage_s, config):
     """Step 7: the integrated outage on the real supervised node, both sides of the receiver."""
     import yaml
@@ -171,7 +180,7 @@ def node_outage(out, outage_s, config):
         sample("online")
         http(port, "/api/wan/cut", "POST")
         mark("WAN cut")
-        t_cut, killed = time.monotonic(), False
+        t_cut, killed, kill_index = time.monotonic(), False, None
         while time.monotonic() - t_cut < outage_s:
             time.sleep(5)
             s = sample("offline")
@@ -180,6 +189,7 @@ def node_outage(out, outage_s, config):
                     pid = json.load(f)["Processor"]["pid"]
                 os.kill(pid, signal.SIGKILL)
                 killed = True
+                kill_index = len(trace)
                 mark("Processor SIGKILLed during the cut", pid=pid)
         result["during_cut"] = {"receiver_at_cut": trace[0]["receiver"] if trace else None,
                                 "pending_before_restore": s["outbox_pending"]}
@@ -206,6 +216,8 @@ def node_outage(out, outage_s, config):
                 any(t["phase"] == "offline" for t in trace) and
                 max(t["events"] for t in trace if t["phase"] == "offline") >
                 min(t["events"] for t in trace if t["phase"] == "offline"),
+            "generation kept going after the Processor was killed (last 30 s of the cut still growing)":
+                kill_index is not None and _grew_until_end([t for t in trace if t["phase"] == "offline"], 30),
             "receiver got nothing new while the WAN was cut":
                 len({t["receiver"] for t in trace if t["phase"] == "offline"}) <= 1,
             "Processor was restarted by the supervisor": restarts >= 1,
