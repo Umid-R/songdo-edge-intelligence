@@ -21,6 +21,8 @@ from edge.ipc import STOP, BoundedQueue, StopFlag          # noqa: E402
 from edge.models import SensorEvent                        # noqa: E402
 from edge.storage import Storage                           # noqa: E402
 from edge.workers import processor_main                    # noqa: E402
+sys.path.insert(0, os.path.join(ROOT, "tests"))
+import evidence                                            # noqa: E402
 
 N_EVENTS = 40
 RULE = {"name": "co2_vent", "sensor": "CO2", "op": ">", "threshold": 1000,
@@ -85,7 +87,26 @@ class TestCrashRecovery(unittest.TestCase):
         before = self.st.recovery_report()
         # restarted Processor: the queue content died with the old process, only SQLite is left
         self.assertEqual(run_processor(self.cfg, []), 0)
-        return before, self.st.recovery_report()
+        after = self.st.recovery_report()
+        self.save_journal(point, before, after)
+        return before, after
+
+    def save_journal(self, point, before, after):
+        """T1 evidence: ID manifests and the disposition of every admitted event and intent."""
+        if not evidence.enabled():
+            return
+        rd = self.st._read
+        evidence.save(f"T1_kill_{point}.json", {
+            "test": "T1", "crash_point": point, "mechanism": "os._exit(137) inside processor_main (same as SIGKILL)",
+            "recovery_before_restart": before, "recovery_after_restart": after,
+            "admitted_ids": [r["event_id"] for r in rd("SELECT event_id FROM ingress ORDER BY event_id")],
+            "committed_ids": [r["event_id"] for r in rd("SELECT event_id FROM sensor_events ORDER BY event_id")],
+            "journal": {
+                "ingress": rd("SELECT event_id, admitted_at, processed_at FROM ingress ORDER BY admitted_at"),
+                "intents": rd("SELECT decision_id, event_id, rule, rule_version, seq, status, reason, boot_epoch "
+                              "FROM edge_decisions ORDER BY seq"),
+                "receipts": rd("SELECT decision_id, actuator, value, seq, applied_at FROM actuator_receipts ORDER BY seq"),
+                "actuator_state": rd("SELECT * FROM actuator_state")}})
 
     def check_exit_rule(self, rep):
         self.assertEqual(rep["admitted"], N_EVENTS)

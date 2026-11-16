@@ -26,6 +26,8 @@ from edge.api_server import make_handler                # noqa: E402
 from edge.registry import Profile, Scenario             # noqa: E402
 from edge.runner import MAX_LINES, RunManager           # noqa: E402
 from edge.storage import Storage                        # noqa: E402
+sys.path.insert(0, os.path.join(ROOT, "tests"))
+import evidence                                         # noqa: E402
 
 FIX = os.path.join(ROOT, "tests", "fixtures")
 
@@ -203,8 +205,12 @@ class TestConsoleApi(unittest.TestCase):
         cls.srv = ThreadingHTTPServer(("127.0.0.1", cls.port), make_handler(cfg, cls.storage, cls.mgr))
         threading.Thread(target=cls.srv.serve_forever, daemon=True).start()
 
+    transcript = []
+
     @classmethod
     def tearDownClass(cls):
+        evidence.save("T4_api_transcript.json", {"test": "T4", "server": "edge.api_server on a free port",
+                                                 "requests": cls.transcript})
         cls.mgr.cancel_all()
         cls.srv.shutdown()
         cls.srv.server_close()
@@ -217,14 +223,21 @@ class TestConsoleApi(unittest.TestCase):
                                      method=method or ("POST" if data is not None else "GET"))
         try:
             with urllib.request.urlopen(req, timeout=10) as r:
-                return r.status, json.loads(r.read())
+                code, out = r.status, json.loads(r.read())
         except urllib.error.HTTPError as e:
-            return e.code, json.loads(e.read())
+            code, out = e.code, json.loads(e.read())
+        shown = body if isinstance(body, (dict, type(None))) else f"<{len(body)} raw bytes>"
+        brief = out if len(json.dumps(out)) < 2000 else {k: out[k] for k in list(out)[:8]}
+        self.transcript.append({"mono": round(time.monotonic(), 4), "method": req.get_method(), "path": path,
+                                "body": shown, "status": code, "response": brief})
+        return code, out
 
     def test_registry_and_console_page(self):
         code, body = self.call("/api/scenarios")
         self.assertEqual(code, 200)
-        self.assertEqual(len(body["scenarios"]), 25)
+        ids = [x["id"] for x in body["scenarios"]]
+        self.assertEqual(ids[:25], [f"OS{t}-{n}" for t in range(1, 6) for n in range(1, 6)])
+        self.assertIn("NODE-OUTAGE", ids)                                   # the integrated node run
         with urllib.request.urlopen(f"http://127.0.0.1:{self.port}/", timeout=5) as r:
             self.assertIn(b"Songdo Edge Console", r.read())
 
@@ -237,6 +250,27 @@ class TestConsoleApi(unittest.TestCase):
         self.assertEqual(self.call("/api/runs/nope")[0], 404)
         self.assertEqual(self.call("/api/runs/../../etc/passwd")[0], 404)
         self.assertEqual(self.call("/api/batches", {"theme": "OS9"})[0], 400)
+
+    def test_cancel_via_api_leaves_no_process(self):
+        code, run = self.call("/api/runs", {"scenario_id": "OS1-5"})       # ~9 s scenario
+        self.assertEqual(code, 201)
+        rid = run["run_id"]
+        end = time.monotonic() + 15
+        while self.call(f"/api/runs/{rid}")[1]["pid"] is None and time.monotonic() < end:
+            time.sleep(0.1)
+        time.sleep(1.0)
+        pgid = self.mgr.get(rid).pgid
+        code, after = self.call(f"/api/runs/{rid}/cancel", {})
+        self.assertEqual((code, after["state"]), (200, "cancelled"))
+        end = time.monotonic() + 10
+        while RunManager.group_alive(pgid) and time.monotonic() < end:
+            time.sleep(0.1)
+        self.assertFalse(RunManager.group_alive(pgid))                      # no orphan process
+        self.assertEqual(self.call(f"/api/runs/{rid}/cancel", {})[1]["state"], "cancelled")   # idempotent
+        code, again = self.call("/api/runs", {"scenario_id": "OS1-5"})      # restart: a NEW run directory
+        self.assertEqual(code, 201)
+        self.assertNotEqual(again["run_id"], rid)
+        self.call(f"/api/runs/{again['run_id']}/cancel", {})
 
     def test_run_log_evidence_and_duplicate(self):
         code, run = self.call("/api/runs", {"scenario_id": "OS3-2"})

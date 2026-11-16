@@ -19,6 +19,8 @@ sys.path.insert(0, os.path.join(ROOT, "src"))
 from edge import upstream as up                 # noqa: E402
 from edge.models import SensorEvent             # noqa: E402
 from edge.storage import Storage                # noqa: E402
+sys.path.insert(0, os.path.join(ROOT, "tests"))
+import evidence                                 # noqa: E402
 
 N = 200
 
@@ -54,8 +56,30 @@ class TestReceiver(unittest.TestCase):
         self.store = os.path.join(self.tmp.name, "receiver.db")    # a DIFFERENT database file
         self.url = f"http://127.0.0.1:{self.port}"
         self.srv = start_receiver(self.port, self.store)
+        self.trace = []                                      # T2 evidence: every request and response
+        self._orig_http = up._http
+
+        def traced(url, path, obj=None, timeout=2.0):
+            entry = {"mono": round(time.monotonic(), 4), "path": path,
+                     "offered_ids": [e["event_id"] for e in (obj or {}).get("events", [])] or None,
+                     "request": None if (obj is None or "events" in obj) else obj}
+            try:
+                reply = self._orig_http(url, path, obj, timeout)
+                entry["response"] = reply if path != "/ids" else {"ids": len(reply.get("ids", []))}
+                return reply
+            except Exception as e:
+                entry["error"] = f"{type(e).__name__}: {e}"
+                raise
+            finally:
+                self.trace.append(entry)
+        up._http = traced
 
     def tearDown(self):
+        up._http = self._orig_http
+        if evidence.enabled():
+            evidence.save(f"T2_{self._testMethodName}.json", {
+                "test": "T2", "case": self._testMethodName, "receiver_db": "separate SQLite file, own process",
+                "node_outbox_pending_at_end": self.st.outbox_pending(), "requests": self.trace})
         if self.srv.is_alive():
             self.srv.kill()
         self.srv.join(5)
