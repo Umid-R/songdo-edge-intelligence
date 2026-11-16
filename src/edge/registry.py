@@ -15,6 +15,7 @@ THEMES = {
     "OS3": ("OS3 Autonomous Mobility Edge Node", "os3_mobility", "Techno-Park Intersection", "Arlen, Onill"),
     "OS4": ("OS4 IoT Edge Gateway", "os4_iot", "Techno-Strip Tower", "Nazarbek"),
     "OS5": ("OS5 Fault-Tolerant Smart-City Node", "os5_reliable", "Waterfront Lake Sluice", "Umidillo"),
+    "NODE": ("Integrated node (shared by all themes)", "", "Supervised node + receiver process", "Team A"),
 }
 
 
@@ -37,6 +38,8 @@ class Scenario:
     concept: str
     profiles: Dict[str, Profile] = field(default_factory=dict)
     requires_linux: str = ""       # non-empty: the Linux kernel feature it demonstrates on purpose
+    fixtures: str = ""             # what data it runs on (REAL / SAMPLE / SIMULATED), for the evidence
+    fault: str = ""                # which fault or stress it injects, for the evidence
 
     @property
     def members(self):
@@ -46,6 +49,7 @@ class Scenario:
         return {"id": self.id, "theme": self.theme, "theme_title": THEMES[self.theme][0],
                 "site": THEMES[self.theme][2], "members": self.members, "module": self.module,
                 "title": self.title, "concept": self.concept, "requires_linux": self.requires_linux,
+                "fixtures": self.fixtures, "fault": self.fault,
                 "profiles": [{"id": p.id, "label": p.label, "args": list(p.fixed_args),
                               "timeout_s": p.timeout_s, "outage_s": p.outage_s, "exclusive": p.exclusive}
                              for p in self.profiles.values()]}
@@ -78,12 +82,70 @@ LINUX_ONLY = {
 }
 
 
+# Data each task runs on (labels as in sources/source_registry.csv) and the fault it injects.
+# Both go into every run's evidence.json ("mark fixture data and the fault mechanism in each manifest").
+FIXTURES = {
+    "OS1-1": "SAMPLE VWorld footprints (data/vworld_buildings_SAMPLE.geojson); SIMULATED CO2 / temperature",
+    "OS1-2": "synthetic occupancy increments (no external data)",
+    "OS1-3": "SIMULATED CO2 readings",
+    "OS1-4": "live /proc samples of the scenario's own processes (no fixture)",
+    "OS1-5": "SIMULATED room sensor events",
+    "OS2-1": "SIMULATED LiDAR readings",
+    "OS2-2": "none: timing of the scenario's own control loop",
+    "OS2-3": "SIMULATED LiDAR proximity values around 0.8 m",
+    "OS2-4": "SIMULATED worker ticks",
+    "OS2-5": "SAMPLE Central Park pathway geometry; SIMULATED LiDAR trace (data/os2_sensor_trace_SIMULATED.csv)",
+    "OS3-1": "REAL Incheon BIS stops/routes (data/incheon_bis_route_stops_20260630.csv); SIMULATED vehicle + pedestrian stream",
+    "OS3-2": "synthetic queue items (alarms + logs)",
+    "OS3-3": "synthetic 5,000-item burst",
+    "OS3-4": "synthetic shared state",
+    "OS3-5": "SIMULATED vehicle surge",
+    "OS4-1": "SIMULATED PM2.5 / noise / light streams",
+    "OS4-2": "SIMULATED readings with injected network delay",
+    "OS4-3": "SIMULATED PM2.5 readings",
+    "OS4-4": "SIMULATED writes into a live SQLite database",
+    "OS4-5": "SIMULATED PM2.5; AirKorea station 131233 baseline SIMULATED unless data/airkorea_131233_pm25.csv exists",
+    "OS5-1": "none: health of the scenario's own workers",
+    "OS5-2": "SIMULATED water levels",
+    "OS5-3": "none: lock experiment",
+    "OS5-4": "SIMULATED flood hydrograph (MEIS not used)",
+    "OS5-5": "SIMULATED water levels",
+}
+FAULTS = {
+    "OS1-1": "none (ingestion and point-in-polygon mapping)",
+    "OS1-2": "unsynchronised concurrent writers (lost-update race)",
+    "OS1-3": "command TTL expiry on the monotonic clock",
+    "OS1-4": "CPU contention between sampled processes",
+    "OS1-5": "WAN cut (mock link down), then drain",
+    "OS2-1": "injected wrong MOVE commands vetoed by the SafetyMonitor process",
+    "OS2-2": "two CPU-burner processes competing with the control loop",
+    "OS2-3": "obstacle below 0.8 m and a command older than the 500 ms TTL",
+    "OS2-4": "SIGKILL of the worker process",
+    "OS2-5": "WAN cut during navigation",
+    "OS3-1": "none (context correlation)",
+    "OS3-2": "log flood while an alarm arrives",
+    "OS3-3": "overload burst: 5,000 items into 500 slots; slow consumer",
+    "OS3-4": "concurrent writers with stale versions",
+    "OS3-5": "WAN cut, replay and deliberate duplicate resend",
+    "OS4-1": "slow and fast producers, frames split across reads",
+    "OS4-2": "out-of-order and late delivery",
+    "OS4-3": "threshold crossing and relay TTL expiry",
+    "OS4-4": "overlapping backup runs (flock) during concurrent writes",
+    "OS4-5": "WAN cut and deliberate duplicate resend",
+    "OS5-1": "dependency down, SIGSTOP (hang) and SIGKILL",
+    "OS5-2": "three SIGKILLs of the processor",
+    "OS5-3": "inverted lock order (deadlock)",
+    "OS5-4": "water level rising through 2.8 m and falling back",
+    "OS5-5": "simultaneous WAN cut and worker SIGKILL",
+}
+
+
 def _s(sid, file, title, concept, extra=None):
     theme = sid.split("-")[0]
     profiles = {"standard": STANDARD}
     profiles.update(extra or {})
     return Scenario(sid, theme, f"edge.teams.{THEMES[theme][1]}.{file}", title, concept, profiles,
-                    LINUX_ONLY.get(sid, ""))
+                    LINUX_ONLY.get(sid, ""), FIXTURES[sid], FAULTS[sid])
 
 
 SCENARIOS: Dict[str, Scenario] = {s.id: s for s in [
@@ -142,12 +204,27 @@ SCENARIOS: Dict[str, Scenario] = {s.id: s for s in [
 ]}
 
 
+# Not a handbook task: the whole supervised node + receiver through a WAN cut and a Processor SIGKILL,
+# so the fault/restore trace and both sides of the receiver boundary come from ONE console run.
+SYSTEM_RUNS: Dict[str, Scenario] = {"NODE-OUTAGE": Scenario(
+    "NODE-OUTAGE", "NODE", "edge.node_outage", "Integrated node outage: WAN cut + Processor SIGKILL",
+    "supervised node, durable ingress, receiver ACKs, G = C = A = R",
+    {"outage60": Profile("outage60", "WAN cut 60 s", ("--outage", "60"), timeout_s=300, outage_s=60),
+     "outage600": Profile("outage600", "WAN cut 600 s (handbook)", ("--outage", "600"), timeout_s=1200,
+                          outage_s=600, exclusive=True)},
+    requires_linux="SIGKILL of a supervised worker",
+    fixtures="SIMULATED sensor streams of config/os2.yaml (SRC-08)",
+    fault="WAN cut + SIGKILL of the Processor halfway through the cut; generation frozen after the drain")}
+
+ALL: Dict[str, Scenario] = {**SCENARIOS, **SYSTEM_RUNS}     # what the console and runner can launch
+
+
 class RegistryError(ValueError):
     pass
 
 
 def get(scenario_id) -> Scenario:
-    s = SCENARIOS.get(scenario_id) if isinstance(scenario_id, str) else None
+    s = ALL.get(scenario_id) if isinstance(scenario_id, str) else None
     if s is None:
         raise RegistryError("Unknown scenario ID")
     return s
@@ -168,7 +245,9 @@ def scenario_command(scenario_id, profile_id, python, run_dir) -> Tuple[List[str
 def select(theme=None, only=None):
     """Registry entries in handbook order, optionally one theme / scenario number (e.g. 's5')."""
     out = []
-    for s in SCENARIOS.values():
+    for s in ALL.values():
+        if s.id in SYSTEM_RUNS and not ((theme and theme.upper() == s.theme) or (only and only.upper() == s.id)):
+            continue                          # system runs only when asked for by theme or ID
         if theme and s.theme != theme.upper():
             continue
         if only and not (s.module.rsplit(".", 1)[1].startswith(only) or s.id == only.upper()):

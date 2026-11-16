@@ -184,7 +184,9 @@ async function loadRegistry(){
  const r=await api('/api/scenarios');REG=r.scenarios;
  $('themes').innerHTML=['ALL',...Object.keys(r.themes)].map(t=>`<button data-t="${t}" class="${t===THEME?'active':''}" title="${t==='ALL'?'':esc(r.themes[t].title+' · '+r.themes[t].members)}">${t==='ALL'?'All 25':t}</button>`).join('');
  $('themes').querySelectorAll('button').forEach(b=>b.onclick=()=>{THEME=b.dataset.t;$('themes').querySelectorAll('button').forEach(x=>x.classList.toggle('active',x===b));
-  $('runAll').textContent=THEME==='ALL'?'Run all 25':'Run all '+THEME;renderScen();});
+  $('runAll').textContent=THEME==='ALL'?'Run all 25':'Run all '+THEME;
+  const single=THEME==='NODE';$('runAll').style.display=single?'none':'';$('batchProfile').style.display=single?'none':'';
+  renderScen();});
  window.THEMES=r.themes;renderScen();
 }
 function lastRun(sid){return RUNS.find(r=>r.scenario_id===sid)}

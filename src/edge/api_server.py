@@ -184,6 +184,8 @@ def make_handler(cfg, storage, runs=None):
                         if theme is not None and theme not in reg.THEMES:
                             return self._err(400, "Unknown theme")
                         ids = [s.id for s in reg.select(theme)]
+                        if not ids:
+                            return self._err(400, "No scenarios for this theme")
                     b = runs.start_batch(ids, body.get("profile", "standard"))
                     return self._send(201, b)
             except reg.RegistryError as e:

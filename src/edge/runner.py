@@ -153,7 +153,7 @@ class RunManager:
         self.root = root
         self.results_dir = results_dir or os.path.join(root, "results", "runs")
         self.python = python or self._default_python(root)
-        self.registry = registry or reg.SCENARIOS
+        self.registry = registry or reg.ALL
         self.extra_pythonpath = list(extra_pythonpath)
         self.max_parallel = max_parallel
         self.runs = collections.OrderedDict()
@@ -172,7 +172,7 @@ class RunManager:
 
     # ---- validation (shared adapter) ----
     def _command(self, scenario_id, profile_id, run_dir):
-        if self.registry is reg.SCENARIOS:
+        if self.registry is reg.ALL:
             return reg.scenario_command(scenario_id, profile_id, self.python, run_dir)
         entry = self.registry.get(scenario_id) if isinstance(scenario_id, str) else None
         if entry is None:
@@ -486,7 +486,9 @@ class RunManager:
             "platform": platform_info(),
             "artifacts": artifacts,
             "error": run.error,
-            "data_labels": "see sources/source_registry.csv (REAL / SAMPLE / SIMULATED)",
+            "fixtures": run.scenario.fixtures or None,
+            "fault_mechanism": run.scenario.fault or None,
+            "data_labels": "REAL / SAMPLE / SIMULATED as in sources/source_registry.csv",
         }
 
     def _finish(self, run):
