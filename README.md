@@ -17,6 +17,14 @@ intents with receipts), the outbox drains to an **independent receiver process**
 per-event ACKs and G = C = A = R reconciliation, and **one offline web console runs all 25 tasks**
 (any task, any profile, cancel, live log, JSON evidence) through the same registry as the CLI.
 
+**At a glance, final term (Linux run bundles, 16 Nov 2026):** 25/25 scenarios pass through the CLI **and**
+through the console with 25/25 identical verdicts · 119/119 unit, scenario and T1–T5 tests · four 10-minute
+WAN outages pass · integrated 600 s node outage with a Processor SIGKILL: **G = C = A = R = 2,674**, 0 lost,
+console API answered 139/139 polls · e-stop under SQLite writer contention: tick gap ≤ 52 ms, command age
+≤ 34 ms (TTL 500 ms).
+
+![Console: all 25 tasks passed](docs/images/21_console_all_25_passed.jpg)
+
 **At a glance at the midterm (all on one team machine, see [Results](#results)):** 25/25 scenarios pass · 87/87 unit
 tests pass · four 10-minute WAN outages with **zero lost and zero duplicated events** · systemd restarts the node 2 s after a SIGKILL · the Docker container runs healthy · the robot stopped
 for **162/162** obstacles while offline · the live dashboard keeps *Conserved: yes* through a cut and restore.
@@ -33,7 +41,7 @@ for **162/162** obstacles while offline · the live dashboard keeps *Conserved: 
 6. [File layout](#file-layout-as-in-the-course-readme)
 7. [Operations: systemd, backup, container](#operations) (results: Results §7)
 8. [Requirement map](#requirement-map-handbook-rubric--where-it-is)
-9. [Known gaps](#known-gaps-be-honest-about-them-in-the-defense)
+9. [Known limitations](#known-limitations)
 
 ---
 
@@ -154,28 +162,55 @@ receiver): no false "sent" (A − R = ∅), no unknown IDs (R − C = ∅), and 
 | T5 | Same argv and verdicts from the CLI and console paths | `tests/test_runner_api.py`, full 25/25 in the bundle | `manifests/*_cli.json`, `manifests/*_ui.json` |
 | Node | Integrated outage: WAN cut, Processor SIGKILL mid-cut, restore, frozen generation, G = C = A = R, API polled throughout | console task **NODE-OUTAGE** (`src/edge/node_outage.py`) | `runs/<run_id>/node_outage/` (trace.csv, node_outage.json) + evidence.json |
 
-### Final-term run bundle (Linux evidence)
-`python3 scripts/make_run_bundle.py --node-outage 600 --long` on Ubuntu 26.04.1 LTS, Python 3.14.4
-(2026-11-16, ~56 min, commit `7b50101`; the bundle zip is submitted separately, not committed):
+### Final-term run bundles (Linux evidence)
+Produced with `scripts/make_run_bundle.py` on Ubuntu 26.04.1 LTS, kernel 7.0, Python 3.14.4, SQLite 3.46.1
+(aarch64, 4 CPUs) on 16 Nov 2026. The bundle zips are submitted with the report and attached to the GitHub
+release; they are not committed (run output, not code).
 
-| Step | Result |
+| Bundle | Command | Result |
+|---|---|---|
+| `bundle_20261116-110306` (commit `82d9636`) | `--node-outage 600 --long` (56 min) | 117 tests OK · 25/25 CLI + 25/25 console, **parity 25/25** · 600 s node outage PASS (G = C = A = R = 2,684) · 600 s profiles OS1-5, OS2-5, OS3-5, OS5-5 **4/4** (603–608 s) |
+| `bundle_20261116-124312` (commit `7fdf37a`, final) | `--node-outage 600 --no-parity` (15 min) | 119 tests OK with T1–T4 evidence files · 25/25 · **NODE-OUTAGE 600 s through the console runner: G = C = A = R = 2,674**, 0 pending, API 139 polls / 0 failures |
+
+![Final bundle on the team machine](docs/images/28_bundle_final.png)
+
+| 600 s profile | During the cut | After the WAN returns |
+|---|---|---|
+| OS1-5 | 6,000 readings, longest gap 122 ms; rule acted on 900/900 high-CO₂ readings | 6,040 stored = 6,040 delivered |
+| OS2-5 | 12,000 ticks, longest gap 180 ms (limit 300); 162/162 e-stops, 0 false stops for 49 cyclists | 24,320 = 24,320 |
+| OS3-5 | 9,319 local decisions; sign 30 km/h and back after its TTL | 56,380 = 56,380; 5 resends ignored |
+| OS5-5 | WAN cut + SIGKILL 0 ms apart; worker back in 0.17 s; gate opened 0.05 s after the first flood reading | 240 = 240; no zombies |
+
+![NODE-OUTAGE 600 s](docs/images/25_node_outage_600s.svg)
+
+*Integrated node outage (bundle 124312): the node keeps committing and the outbox grows while the receiver stays
+flat; the Processor SIGKILL at 301 s does not interrupt generation; on restore the backlog drains in seconds.*
+
+| Console | |
 |---|---|
-| Preflight, OS fundamentals, unit + scenario + T1–T5 tests, receiver integration test | all exit 0 (115 tests) |
-| 25 scenarios, CLI path | 25 / 25 passed, 0 skipped |
-| 25 scenarios, console path | 25 / 25 passed; CLI vs console verdicts identical 25 / 25 |
-| Integrated node outage, 600 s WAN cut, Processor SIGKILLed at 300 s | 1,739 events: G = C = A = R = 1,739, 0 pending, 0 lost, receiver unchanged during the cut, receipts = dispatched (30) |
-| 600 s profiles OS1-5, OS2-5, OS3-5, OS5-5 | 4 / 4 passed (603–608 s each) |
+| ![run panel](docs/images/22_console_run_panel.jpg) | ![node outage run](docs/images/23_console_node_outage.jpg) |
+| Run panel: verdict, checks, telemetry, live log, cancel, evidence export | NODE-OUTAGE started from the console, both sides of the receiver |
 
-**Defect found by this run, and fixed.** The node-outage trace shows events growing ~4/s until about
-150 s after the Processor kill, then flat at 1,739 for the rest of the cut: no data was lost, but
-generation had stopped. Cause: a `multiprocessing.Queue` reader holds the queue's internal read lock
-while it waits; a reader SIGKILLed in that wait never releases it, so the restarted Processor could not
-read the queue (it kept committing through the ingress sweep), the queue filled up, and SensorGen's
-drop-oldest step spun forever on the same lock. Fix: the supervisor treats the queue as poisoned when
-either end dies abnormally, builds a new queue and restarts both ends on it (the old contents are in the
-durable ingress table); `BoundedQueue.put()` gives up after 1 s instead of spinning. Regression test:
-`tests/test_supervisor_queue_reset.py`; the bundle now also checks that generation is still growing in the
-last 30 s of the cut. A re-run of the 600 s node outage after the fix is in the final submission.
+![Live node after reconcile](docs/images/24_console_live_reconcile.jpg)
+
+**Defect found by our first bundle run, and fixed.** In the first 600 s node outage, events grew ~4/s until about
+130 s after the Processor kill, then stayed flat at 1,739 for the rest of the cut: no data was lost, but
+generation had stopped. Cause: a `multiprocessing.Queue` reader holds the queue's internal read lock while it
+waits; a reader SIGKILLed in that wait never releases it, so the restarted Processor could not read the queue
+(it kept committing through the ingress sweep), the queue filled up, and SensorGen's drop-oldest step spun
+forever on the same lock. Fix: the supervisor treats the queue as poisoned when either end dies abnormally,
+builds a new queue and restarts both ends on it (the old contents are in the durable ingress table);
+`BoundedQueue.put()` gives up after 1 s instead of spinning. Regression test:
+`tests/test_supervisor_queue_reset.py`; both bundles above were run after the fix and check that generation is
+still growing at the end of the cut.
+
+![Before and after the queue fix](docs/images/26_queue_fix_before_after.svg)
+
+**T3 under writer contention** (bundle 124312): 50 ms loop on the shared node path while three processes write to
+the same SQLite file (1.69 M writes): max tick gap 51.9 ms, every e-stop command applied ≤ 33.7 ms after issue;
+0.79 / 0.799 m latch, 0.80 / 0.81 m do not; exactly at the TTL a command is EXPIRED.
+
+![T3](docs/images/27_t3_boundaries.svg)
 
 ### Platforms
 Target: Ubuntu 24.04 + Python 3.12. Every module now imports on any OS (the midterm `os.sysconf` at
@@ -560,7 +595,7 @@ vmstat 1 5                                                  # context switches, 
 
 ---
 
-## Known gaps (be honest about them in the defense)
+## Known limitations
 - **Data:** OS1-1 uses SAMPLE VWorld footprints, OS2-5 an APPROXIMATE Central Park path and a SIMULATED LiDAR trace, OS4-5 a SIMULATED AirKorea baseline, OS5-4 SIMULATED water levels. Details in `sources/source_registry.csv`.
 - **Test platform:** the screenshots come from Ubuntu 26.04 / Python 3.14. On the handbook's Ubuntu 24.04 the five OS2 scenarios were run with Python 3.12 and the full suite with Python 3.13; there are no screenshots of those runs.
 - **OS2-5 timing (fixed):** before the storage fix (PR #8: one cached SQLite connection per thread instead of a new one per write) the "longest gap between ticks < 300 ms" check failed on busy team machines (312–404 ms). After the fix: 137 ms on the test machine and **89 ms** on the team machine (Results §5).
@@ -570,8 +605,6 @@ vmstat 1 5                                                  # context switches, 
   launched, isolated, cancelled and recorded from the same console as the node; the crash-safe intent
   path and the HTTP receiver are implemented in the shared node, while scenario programs keep their own
   local models of those mechanisms.
-- The final-term run bundle was captured on **Ubuntu 26.04.1 LTS, Python 3.14.4, kernel 7.0 (aarch64,
-  4 CPUs)**, not on the handbook's Ubuntu 24.04 / Python 3.12; all steps passed there.
 - **OS3:** the scripts `build_bus_stops.py` and `os3_live_demo.py` mentioned by the OS3 team are not in the repo.
 
 ## Git workflow
