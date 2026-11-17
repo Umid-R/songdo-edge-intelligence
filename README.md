@@ -315,6 +315,26 @@ result. It prints `[PASS]` only when every check holds; every check line starts 
 | OS5-4 Sluice gate actuation | Water level > 2.8 m opens the backup sluice gate (exactly 2.8 does not), with a monotonic TTL and hysteresis so the gate does not chatter. | Strict threshold, TTL, hysteresis |
 | OS5-5 Compound failure | The WAN is cut and the processor is SIGKILLed at the same moment during a flood: the worker recovers, the gate still opens locally, and every flood event is delivered after the WAN returns. | Combined fault tolerance |
 
+### OS6 (extra) — Smart Parking Edge Node (24-bay lot, zones A–C)
+OS6 is an extra theme on top of the handbook's 25 tasks. It is in the registry as `OS6-1` and `OS6-2`,
+but it is **not** part of *Run all 25*. Ways to run it:
+- in the console: the green **Test OS6** button in the header (or on the **OS6 Parking** tab). It runs
+  both scenarios one after the other and plays them on a **2D parking lot**.
+- from the CLI: `python3 scenarios/run_all_scenarios.py --theme os6`
+- directly: `PYTHONPATH=src python3 -m edge.teams.os6_parking.s1_slot_availability` (or `s2_slot_booking`)
+
+| Scenario | What it shows | OS concept |
+|---|---|---|
+| OS6-1 Is a parking bay available? | Three zone-sensor processes write bay occupancy while a display-board process reads the lot about 1,500 times per phase. A one-tick sensor glitch never flips a bay, because a change is committed only after 2 identical readings. When bays are written one by one, the board catches half-updated zones (torn reads). With one transaction per zone and one WAL snapshot per read, it sees 0 torn reads. `is_available()` and *nearest free bay* match the ground truth for 24/24 bays. | Readers vs. writers, atomic transaction, snapshot isolation, debounce |
+| OS6-2 Booking a parking bay | 16 driver processes press *Book* at once for 10 free bays. Naive check-then-act double-books (one bay promised to many drivers). Compare-and-set (`UPDATE … WHERE state='FREE'` in one transaction) gives exactly 10 bookings and 6 *lot full* answers; drivers who lose the race retry. A re-sent request returns the same booking (idempotency key). Holds expire on the monotonic clock: a reaper process frees the no-shows' bays, the waitlist gets them, and a late check-in is refused. | Race condition, compare-and-set, idempotency, TTL + reaper process |
+
+The scenarios print their frames as `@VIZ {json}` lines (hidden in the run log) and also save them as
+`results/runs/<run_id>/os6_frames_OS6-*.json`. The OS6 tab draws them: play / pause / replay, a
+slider, and a timeline you can click to jump to a frame. Red = double-booked, dashed orange =
+half-updated zone, blue with a bar = held booking and its time left.
+
+![OS6 parking console](docs/images/30_os6_parking_console.png)
+
 ---
 
 ## Results
@@ -518,7 +538,7 @@ songdo-edge-intelligence/
 ├── src/
 │   ├── edge/
 │   │   ├── api_server.py          # zero-dependency local HTTP API server (node + 25-task runner)
-│   │   ├── registry.py            # the 25 official tasks: ID -> module + run profiles (CLI and UI)
+│   │   ├── registry.py            # the 25 official tasks (+ NODE-OUTAGE, extra OS6): ID -> module + profiles
 │   │   ├── runner.py              # isolated runs: process group, cancel, timeout, evidence.json
 │   │   ├── upstream.py            # independent receiver process + per-ID ACK sender + reconcile
 │   │   ├── decision.py            # local rule engine, monotonic-clock command TTL
@@ -531,6 +551,7 @@ songdo-edge-intelligence/
 │   │   ├── config.py, procfs.py   # config loader, /proc sampling
 │   │   ├── core/                  # backward-compatibility alias for the old edge.core.* imports
 │   │   └── teams/os1_building ... os5_reliable/   # one file per scenario (25)
+│   │       (+ os6_parking/: extra theme, OS6-1 availability, OS6-2 booking)
 │   └── ui/static/
 │       └── index.html             # local edge console (no frameworks)
 ├── systemd/
@@ -539,7 +560,7 @@ songdo-edge-intelligence/
 ├── tests/
 │   ├── test_os_fundamentals.py    # the five-check OS suite (Step 3)
 │   ├── test_core.py, test_pipeline.py, test_configs.py
-│   └── os1/ ... os5/              # scenario tests
+│   └── os1/ ... os6/              # scenario tests (os6 = extra parking theme)
 ├── requirements.txt
 ├── Songdo_Edge_Intelligence_Handbook.pdf   # instructor's PDF: copy it here locally (not in the public repo)
 └── README.md

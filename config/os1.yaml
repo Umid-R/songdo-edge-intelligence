@@ -12,6 +12,7 @@ paths:
   schema: sql/schema.sql
   static: src/ui/static
   socket: /tmp/songdo_os1.sock
+  buildings_geojson: data/vworld_buildings_SAMPLE.geojson   # footprints drawn on the live map
 
 network:
   api_host: 127.0.0.1
@@ -28,6 +29,11 @@ sensor:
 
 rules:
   - {name: co2_vent, sensor: INDOOR_CO2_PPM, op: ">", threshold: 1000, actuator: HVAC_DAMPER_PCT, command: 100, ttl_s: 15.0}
+
+map:                          # live 2D map page: http://127.0.0.1:8001/map
+  scene: os1_building
+  defaults:                   # damper position when no command is inside its TTL. ASSUMED: 30 %
+    HVAC_DAMPER_PCT: 30       # baseline ventilation; confirm or change it.
 
 supervisor:
   max_restarts: 5

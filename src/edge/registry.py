@@ -15,6 +15,7 @@ THEMES = {
     "OS3": ("OS3 Autonomous Mobility Edge Node", "os3_mobility", "Techno-Park Intersection", "Arlen, Onill"),
     "OS4": ("OS4 IoT Edge Gateway", "os4_iot", "Techno-Strip Tower", "Nazarbek"),
     "OS5": ("OS5 Fault-Tolerant Smart-City Node", "os5_reliable", "Waterfront Lake Sluice", "Umidillo"),
+    "OS6": ("OS6 Smart Parking Edge Node (extra)", "os6_parking", "Songdo parking lot (24 bays)", "Team A (extra theme)"),
     "NODE": ("Integrated node (shared by all themes)", "", "Supervised node + receiver process", "Team A"),
 }
 
@@ -110,6 +111,8 @@ FIXTURES = {
     "OS5-3": "none: lock experiment",
     "OS5-4": "SIMULATED flood hydrograph (MEIS not used)",
     "OS5-5": "SIMULATED water levels",
+    "OS6-1": "SIMULATED bay occupancy trace with one-tick sensor glitches (seeded)",
+    "OS6-2": "SIMULATED lot: 10 free of 24 bays, 16 driver processes (seeded)",
 }
 FAULTS = {
     "OS1-1": "none (ingestion and point-in-polygon mapping)",
@@ -137,6 +140,8 @@ FAULTS = {
     "OS5-3": "inverted lock order (deadlock)",
     "OS5-4": "water level rising through 2.8 m and falling back",
     "OS5-5": "simultaneous WAN cut and worker SIGKILL",
+    "OS6-1": "sensor glitches; bay-by-bay (non-atomic) zone writes read by a concurrent display board",
+    "OS6-2": "16 simultaneous bookings for 10 bays (check-then-act race), duplicate request, no-show holds",
 }
 
 
@@ -216,7 +221,16 @@ SYSTEM_RUNS: Dict[str, Scenario] = {"NODE-OUTAGE": Scenario(
     fixtures="SIMULATED sensor streams of config/os2.yaml (SRC-08)",
     fault="WAN cut + SIGKILL of the Processor halfway through the cut; generation frozen after the drain")}
 
-ALL: Dict[str, Scenario] = {**SCENARIOS, **SYSTEM_RUNS}     # what the console and runner can launch
+# Extra theme beyond the handbook's 25 (OS6 smart parking). Like the system runs it is not part of
+# "Run all 25"; it runs when asked for by theme (OS6) or ID, or from the console's "Test OS6" button.
+EXTRA: Dict[str, Scenario] = {s.id: s for s in [
+    _s("OS6-1", "s1_slot_availability", "Parking Slot Availability (is a bay free?)",
+       "sensor processes + reader, debounce, atomic zone transaction, WAL snapshot"),
+    _s("OS6-2", "s2_slot_booking", "Parking Slot Booking without Double Booking",
+       "check-then-act race, compare-and-set, idempotency key, monotonic hold TTL"),
+]}
+
+ALL: Dict[str, Scenario] = {**SCENARIOS, **SYSTEM_RUNS, **EXTRA}   # what the console and runner can launch
 
 
 class RegistryError(ValueError):
@@ -246,7 +260,7 @@ def select(theme=None, only=None):
     """Registry entries in handbook order, optionally one theme / scenario number (e.g. 's5')."""
     out = []
     for s in ALL.values():
-        if s.id in SYSTEM_RUNS and not ((theme and theme.upper() == s.theme) or (only and only.upper() == s.id)):
+        if (s.id in SYSTEM_RUNS or s.id in EXTRA) and not ((theme and theme.upper() == s.theme) or (only and only.upper() == s.id)):
             continue                          # system runs only when asked for by theme or ID
         if theme and s.theme != theme.upper():
             continue
@@ -259,7 +273,7 @@ def select(theme=None, only=None):
 def check_modules_exist(root):
     """Every registered module has its file (used by the tests)."""
     missing = []
-    for s in SCENARIOS.values():
+    for s in (*SCENARIOS.values(), *EXTRA.values()):
         path = os.path.join(root, "src", *s.module.split(".")) + ".py"
         if not os.path.exists(path):
             missing.append(s.module)

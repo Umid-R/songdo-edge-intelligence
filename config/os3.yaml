@@ -12,6 +12,7 @@ paths:
   schema: sql/schema.sql
   static: src/ui/static
   socket: /tmp/songdo_os3.sock
+  bus_stops: data/bus_stops_techno_park.json   # reference data drawn on the live map
 
 network:
   api_host: 127.0.0.1
@@ -28,6 +29,11 @@ sensor:
 
 rules:
   - {name: ped_surge_speed_sign, sensor: PED_CROSSWALK_COUNT, op: ">", threshold: 10, actuator: VARIABLE_SPEED_SIGN_KMH, command: 30, ttl_s: 60.0}
+
+map:                          # live 2D map page: http://127.0.0.1:8003/map
+  scene: os3_intersection
+  defaults:                   # sign value when no command is inside its TTL. ASSUMED: 50 km/h urban
+    VARIABLE_SPEED_SIGN_KMH: 50   # arterial limit (Korea "Safe Speed 5030"); confirm or change it.
 
 supervisor:
   max_restarts: 5

@@ -1,0 +1,1047 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Songdo Edge - Live map</title>
+<!-- Zero-dependency page: no map tiles, fonts or scripts from the Internet, so it keeps working
+     while the WAN is cut (that is the demo). Data: GET /api/map/context once, GET /api/map every second.
+     One scene per theme, chosen by the node's config (map.scene):
+       os1_building (OS1-5) · os2_park (OS2-5) · os3_intersection (OS3-5) · os5_sluice (OS5-5) -->
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--ink:#1d232b;--mute:#66707c;--line:#dfe3e8;--ok:#1f7a3a;--okbg:#e5f4ea;
+ --bad:#b3261e;--badbg:#fbe9e7;--run:#1d5fb4;--runbg:#e6effb;--warn:#8a5a00;--warnbg:#fdf3dc}
+*{box-sizing:border-box}
+body{margin:0;font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif;background:var(--bg);color:var(--ink)}
+header{display:flex;flex-wrap:wrap;align-items:center;gap:.6rem 1rem;padding:.8rem 1.4rem;background:#14202e;color:#fff}
+header h1{font-size:1.05rem;margin:0 1rem 0 0;font-weight:650}
+header .node{color:#b9c6d6;font-family:ui-monospace,monospace;font-size:.85rem}
+header .sp{flex:1}
+header a,header button{font:inherit;background:#22334a;border:1px solid #34495f;color:#fff;padding:.32rem .75rem;
+ border-radius:6px;cursor:pointer;text-decoration:none}
+header a:hover,header button:hover{border-color:#6d8299}
+button.act{font:inherit;border:1px solid var(--line);background:#fff;color:var(--ink);padding:.32rem .7rem;border-radius:6px;cursor:pointer}
+button.act:hover{border-color:#9aa5b1}button.act.danger{border-color:#e3b2ad;color:var(--bad)}
+.badge{display:inline-block;padding:.12rem .55rem;border-radius:999px;font-size:.78rem;font-weight:650;white-space:nowrap}
+.on{background:var(--okbg);color:var(--ok)}.off{background:var(--badbg);color:var(--bad)}
+.none{background:#eef0f3;color:var(--mute)}.run{background:var(--runbg);color:var(--run)}.warnb{background:var(--warnbg);color:var(--warn)}
+.wrap{display:grid;grid-template-columns:minmax(0,1fr) 370px;gap:1rem;padding:1rem 1.4rem;align-items:start}
+@media(max-width:1150px){.wrap{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:.75rem .95rem;margin-bottom:.9rem}
+.card h2{font-size:.9rem;margin:0 0 .55rem;display:flex;align-items:center;gap:.5rem}
+.card h2 .sp{flex:1}
+.mapcard{padding:0;overflow:hidden;position:relative}
+svg#map{display:block;width:100%;height:auto;background:#dfe5dc}
+.mute{color:var(--mute)}.small{font-size:.8rem}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.8rem}
+.big{font-size:1.7rem;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.1}
+.row{display:flex;align-items:baseline;gap:.6rem}
+.bar{height:6px;background:#e8ebef;border-radius:3px;overflow:hidden;margin:.35rem 0}
+.bar i{display:block;height:100%;background:#e8a400}
+table{border-collapse:collapse;width:100%;font-size:.78rem}
+td .badge{font-size:.68rem;padding:.08rem .4rem}
+td,th{padding:.25rem .3rem;border-bottom:1px solid var(--line);text-align:left}
+th{color:var(--mute);font-weight:600;font-size:.72rem;text-transform:uppercase}
+tr.warnrow td{background:#fdf6e3}
+.chips{display:flex;flex-wrap:wrap;gap:.25rem;margin:.2rem 0 .5rem}
+.chip{font-size:.72rem;padding:.05rem .4rem;border-radius:4px;background:#eef2f6;border:1px solid #dde3ea}
+.stop{padding:.35rem .4rem;border-radius:6px;cursor:default}.stop.hl{background:#fff6d6}
+.legend{display:flex;flex-wrap:wrap;gap:.4rem 1rem;padding:.55rem .9rem;border-top:1px solid var(--line);font-size:.78rem;color:var(--mute)}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:.3rem;vertical-align:-1px}
+.sf{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:.4rem;text-align:center}
+.sf .box{border:1px solid var(--line);border-radius:8px;padding:.45rem .3rem}
+.sf .link{font-size:.75rem;font-weight:650;min-width:84px}
+.btns{display:flex;flex-wrap:wrap;gap:.4rem;margin:.4rem 0}
+ol.steps{margin:.3rem 0 0;padding-left:1.2rem;font-size:.8rem;color:var(--mute)}
+#err{display:none;position:absolute;inset:0;background:rgba(20,32,46,.72);color:#fff;font-weight:650;
+ align-items:center;justify-content:center;text-align:center;padding:2rem;font-size:1.05rem}
+</style></head><body>
+<header>
+ <h1 id="title">Songdo Edge · Live map</h1><span class="node" id="node">-</span>
+ <span id="wan" class="badge none">WAN -</span><span id="recv" class="badge none">receiver -</span>
+ <span class="sp"></span>
+ <button onclick="wan('cut')">Simulate WAN Internet Cut</button>
+ <button onclick="wan('restore')">Restore WAN Connection</button>
+ <a href="/">Console</a>
+</header>
+<div class="wrap">
+ <div>
+  <div class="card mapcard">
+   <svg id="map" viewBox="0 0 1000 640" role="img" aria-label="Live schematic map of the edge node's site"></svg>
+   <div id="err"></div>
+   <div class="legend" id="legend"></div>
+  </div>
+  <p class="small mute" id="foot" style="margin:.2rem .2rem 0"></p>
+ </div>
+ <aside>
+  <div class="card" id="extraTop" style="display:none"></div>
+  <div class="card">
+   <h2><span id="actTitle">Actuator</span><span class="sp"></span><span id="actBadge" class="badge none">-</span></h2>
+   <div class="row"><span class="big" id="actVal">-</span><span class="mute" id="actUnit"></span></div>
+   <div class="bar"><i id="ttlBar" style="width:0"></i></div>
+   <div class="small" id="actTxt">-</div>
+  </div>
+  <div class="card">
+   <h2>Sensors (node readings)</h2>
+   <div id="sensors"></div>
+  </div>
+  <div class="card">
+   <h2>Store and forward<span class="sp"></span><span id="consBadge" class="badge none">-</span></h2>
+   <div class="sf">
+    <div class="box"><div class="small mute">Edge node</div><div class="big" id="evN" style="font-size:1.2rem">-</div><div class="small mute">events stored</div></div>
+    <div class="link" id="linkTxt">-</div>
+    <div class="box"><div class="small mute">Receiver</div><div class="big" id="dlN" style="font-size:1.2rem">-</div><div class="small mute">delivered</div></div>
+   </div>
+   <div class="row" style="margin-top:.55rem"><span class="mute small">Outbox waiting</span><span class="big" id="obN" style="font-size:1.2rem">-</span></div>
+  </div>
+  <div class="card">
+   <h2>Latest decisions<span class="sp"></span><span class="small mute" id="decCounts"></span></h2>
+   <table><thead><tr><th>Time</th><th>Rule</th><th>Value</th><th>Status</th></tr></thead><tbody id="dec"></tbody></table>
+  </div>
+  <div class="card">
+   <h2>Node processes</h2>
+   <table><thead><tr><th>Process</th><th>PID</th><th>Restarts</th><th>State</th></tr></thead><tbody id="procs"></tbody></table>
+  </div>
+  <div class="card" id="extra" style="display:none"></div>
+ </aside>
+</div>
+<script>
+"use strict";
+const NS = "http://www.w3.org/2000/svg";
+const svg = document.getElementById("map");
+const $ = id => document.getElementById(id);
+function el(tag, attrs, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs || {}) e.setAttribute(k, attrs[k]);
+  (parent || svg).appendChild(e);
+  return e;
+}
+function txt(s, attrs, parent) { const t = el("text", attrs, parent); t.textContent = s; return t; }
+function esc(s) { return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function fmtTime(t) { return new Date(t * 1000).toLocaleTimeString([], {hour12: false}); }
+function last(series) { return series && series.length ? series[series.length - 1].v : null; }
+function rng(seed) { let s = seed >>> 0; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296); }
+
+// Shared state. S.ctx: /api/map/context; S.live: last /api/map answer; S.ok: node answered.
+const S = {ctx: null, live: null, ok: false};
+const L = {};          // SVG elements shared by the common parts (node LEDs, banner)
+const SCENES = {};
+let SC = null;         // active scene
+
+// Edge-node cabinet with node + WAN LEDs (every scene draws one).
+function nodeBox(x, y, sub, parent) {
+  const g = el("g", {}, parent);
+  el("rect", {x: x - 52, y, width: 104, height: 36, rx: 5, fill: "#14202e"}, g);
+  txt("EDGE NODE", {x: x - 6, y: y + 15, "font-size": 10, "font-weight": 700, fill: "#fff", "text-anchor": "middle"}, g);
+  txt(sub, {x: x - 6, y: y + 28, "font-size": 8.5, fill: "#b9c6d6", "text-anchor": "middle"}, g);
+  L.nodeLed = el("circle", {cx: x + 42, cy: y + 10, r: 4, fill: "#9aa5b1"}, g);
+  L.wanLed = el("circle", {cx: x + 42, cy: y + 24, r: 4, fill: "#9aa5b1"}, g);
+  txt("node", {x: x + 55, y: y + 13, "font-size": 8, fill: "#4a5059"}, g);
+  txt("WAN", {x: x + 55, y: y + 27, "font-size": 8, fill: "#4a5059"}, g);
+  return g;
+}
+function drawBanner() {
+  L.banner = el("g", {opacity: 0});
+  L.bannerRect = el("rect", {x: 0, y: 0, width: 1000, height: 34, fill: "#b3261e"}, L.banner);
+  L.bannerTxt = txt("", {x: 500, y: 22, "font-size": 14, "font-weight": 700, fill: "#fff", "text-anchor": "middle"}, L.banner);
+}
+function schematicNote(s) { txt(s || "Schematic layout, not to scale", {x: 990, y: 630, "font-size": 10, fill: "#6b7380", "text-anchor": "end"}); }
+function ruleFor(actuator) { return S.ctx.rules.find(r => r.actuator === actuator) || S.ctx.rules[0]; }
+function actuator(live, name) { return live.actuators.find(a => a.actuator === name) || {}; }
+
+// ===================================================================== OS3 · Techno-Park intersection
+SCENES.os3_intersection = (() => {
+  const SIGN = "VARIABLE_SPEED_SIGN_KMH";
+  // Main road W-E: y 270..370 (2 lanes each way, right-hand traffic: eastbound below the centre line).
+  // Cross street N-S: x 450..550. Monitored crosswalk on the west arm (x 415..445).
+  const LANES = [
+    {id: "EB1", grp: "EW", axis: "x", s0: -40, d: 1, fix: 332.5, len: 1080, stop: 450, rate: .33},
+    {id: "EB2", grp: "EW", axis: "x", s0: -40, d: 1, fix: 357.5, len: 1080, stop: 450, rate: .25, bus: 800, stopIdx: 1},
+    {id: "WB1", grp: "EW", axis: "x", s0: 1040, d: -1, fix: 282.5, len: 1080, stop: 450, rate: .25, bus: 280, stopIdx: 0},
+    {id: "WB2", grp: "EW", axis: "x", s0: 1040, d: -1, fix: 307.5, len: 1080, stop: 450, rate: .33},
+    {id: "SB1", grp: "NS", axis: "y", s0: -40, d: 1, fix: 462.5, len: 720, stop: 270, rate: .12},
+    {id: "SB2", grp: "NS", axis: "y", s0: -40, d: 1, fix: 487.5, len: 720, stop: 270, rate: .16},
+    {id: "NB1", grp: "NS", axis: "y", s0: 680, d: -1, fix: 512.5, len: 720, stop: 270, rate: .16},
+    {id: "NB2", grp: "NS", axis: "y", s0: 680, d: -1, fix: 537.5, len: 720, stop: 270, rate: .12},
+  ];
+  // Signal plan (seconds): EW green 10, amber 2, all-red 2, NS green 8 (= pedestrian walk on the
+  // west crosswalk, which crosses the EW road), amber 2, all-red 2.
+  const CYCLE = 26;
+  function phase(t) {
+    const c = t % CYCLE;
+    if (c < 10) return {EW: "G", NS: "R", walk: false};
+    if (c < 12) return {EW: "Y", NS: "R", walk: false};
+    if (c < 14) return {EW: "R", NS: "R", walk: false};
+    if (c < 22) return {EW: "R", NS: "G", walk: c < 20};
+    if (c < 24) return {EW: "R", NS: "Y", walk: false};
+    return {EW: "R", NS: "R", walk: false};
+  }
+  const V = {radar: null, peds: null, limit: null, active: false, remaining: 0, threshold: null};
+  const K = 2.4;               // px per second per km/h (drawing scale only)
+  const A = 120, B = 260, GAP = 9;
+  let vehicles = [], peds = [], busTimer = 6, busSide = 0, simT = 0;
+  const PAL = ["#3d6fb6", "#4f7fc4", "#5a6f8c", "#7b8794", "#2f5d9a", "#8a9bb0"];
+  const LIGHT = {G: "#2ecc71", Y: "#f2c94c", R: "#e74c3c"};
+  const M = {};
+
+  function draw(ctx) {
+    el("rect", {x: 0, y: 0, width: 1000, height: 640, fill: "#dfe5dc"});
+    const blocks = [[0, 0, 430, 250], [570, 0, 430, 250], [0, 390, 430, 250], [570, 390, 430, 250]];
+    const bld = [[40, 40, 150, 90], [230, 60, 150, 140], [620, 50, 120, 150], [780, 40, 170, 110], [800, 170, 150, 50],
+                 [40, 470, 120, 130], [200, 520, 190, 90], [620, 440, 160, 90], [820, 430, 140, 170], [620, 560, 160, 50]];
+    blocks.forEach(b => el("rect", {x: b[0], y: b[1], width: b[2], height: b[3], fill: "#e6eae3"}));
+    bld.forEach(b => el("rect", {x: b[0], y: b[1], width: b[2], height: b[3], rx: 6, fill: "#d3d9e0", stroke: "#bcc5cf"}));
+    el("rect", {x: 0, y: 250, width: 1000, height: 140, fill: "#c9ced3"});
+    el("rect", {x: 430, y: 0, width: 140, height: 640, fill: "#c9ced3"});
+    el("rect", {x: 0, y: 270, width: 1000, height: 100, fill: "#4a5059"});
+    el("rect", {x: 450, y: 0, width: 100, height: 640, fill: "#4a5059"});
+    const dash = {stroke: "#e9edf1", "stroke-width": 1.5, "stroke-dasharray": "14 12"};
+    for (const y of [295, 345]) { el("line", {x1: 0, y1: y, x2: 410, y2: y, ...dash}); el("line", {x1: 590, y1: y, x2: 1000, y2: y, ...dash}); }
+    for (const x of [475, 525]) { el("line", {x1: x, y1: 0, x2: x, y2: 230, ...dash}); el("line", {x1: x, y1: 410, x2: x, y2: 640, ...dash}); }
+    const yel = {stroke: "#f2c94c", "stroke-width": 1.4};
+    for (const o of [-1.6, 1.6]) {
+      el("line", {x1: 0, y1: 320 + o, x2: 410, y2: 320 + o, ...yel}); el("line", {x1: 590, y1: 320 + o, x2: 1000, y2: 320 + o, ...yel});
+      el("line", {x1: 500 + o, y1: 0, x2: 500 + o, y2: 230, ...yel}); el("line", {x1: 500 + o, y1: 410, x2: 500 + o, y2: 640, ...yel});
+    }
+    const sl = {stroke: "#fff", "stroke-width": 3};
+    el("line", {x1: 410, y1: 320, x2: 410, y2: 370, ...sl}); el("line", {x1: 590, y1: 270, x2: 590, y2: 320, ...sl});
+    el("line", {x1: 450, y1: 230, x2: 500, y2: 230, ...sl}); el("line", {x1: 500, y1: 410, x2: 550, y2: 410, ...sl});
+    function zebra(x, y, w, h, vertical) {
+      const g = el("g", {});
+      const n = vertical ? Math.floor(h / 10) : Math.floor(w / 10);
+      for (let i = 0; i < n; i++)
+        vertical ? el("rect", {x, y: y + i * 10 + 2, width: w, height: 6, fill: "#f4f6f8"}, g)
+                 : el("rect", {x: x + i * 10 + 2, y, width: 6, height: h, fill: "#f4f6f8"}, g);
+    }
+    M.cwGlow = el("rect", {x: 411, y: 266, width: 38, height: 108, rx: 5, fill: "none", stroke: "#f08c00", "stroke-width": 4, opacity: 0});
+    zebra(415, 270, 30, 100, true); zebra(555, 270, 30, 100, true);
+    zebra(450, 235, 100, 30, false); zebra(450, 375, 100, 30, false);
+    M.sig = {
+      EW: [el("circle", {cx: 404, cy: 380, r: 6, stroke: "#222", "stroke-width": 2}), el("circle", {cx: 596, cy: 260, r: 6, stroke: "#222", "stroke-width": 2})],
+      NS: [el("circle", {cx: 440, cy: 224, r: 6, stroke: "#222", "stroke-width": 2}), el("circle", {cx: 560, cy: 416, r: 6, stroke: "#222", "stroke-width": 2})],
+    };
+    M.walk = [el("rect", {x: 434, y: 236, width: 12, height: 12, rx: 2, stroke: "#222"}), el("rect", {x: 434, y: 392, width: 12, height: 12, rx: 2, stroke: "#222"})];
+
+    // bus stops (positions schematic: the BIS CSV has no coordinates)
+    M.stopEls = {};
+    const stops = (ctx.bus_stops && ctx.bus_stops.stops) || [];
+    const placed = [{idx: 0, x: 760, y: 258, label: "above"}, {idx: 1, x: 760, y: 382, label: "below"}];
+    const side = stops.filter((s, i) => i > 1 && /IT/.test(s.stop_name)).slice(0, 2);
+    side.forEach((s, i) => placed.push({stop: s, x: i ? 562 : 438, y: 110, label: i ? "right" : "left"}));
+    placed.forEach(p => {
+      const s = p.stop || stops[p.idx]; if (!s) return;
+      const g = el("g", {style: "cursor:default"});
+      el("rect", {x: p.x - 16, y: p.y - 6, width: 32, height: 12, rx: 3, fill: "#1a8f6a", stroke: "#0f5c44"}, g);
+      txt("BUS", {x: p.x, y: p.y + 3.5, "font-size": 8, "font-weight": 700, fill: "#fff", "text-anchor": "middle"}, g);
+      const lx = p.label === "left" ? p.x - 22 : p.label === "right" ? p.x + 22 : p.x;
+      const ly = p.label === "above" ? p.y - 14 : p.label === "below" ? p.y + 24 : p.y + 4;
+      const anchor = p.label === "left" ? "end" : p.label === "right" ? "start" : "middle";
+      txt(`${s.stop_name} · ${s.routes.length} routes`, {x: lx, y: ly, "font-size": 11, "font-weight": 600, fill: "#163d31", "text-anchor": anchor}, g);
+      const t = el("title", {}, g); t.textContent = `${s.stop_name} (${s.stop_id})\n${s.routes.map(r => r.route_number).join(", ")}`;
+      g.addEventListener("mouseenter", () => hlStop(s.stop_id, true));
+      g.addEventListener("mouseleave", () => hlStop(s.stop_id, false));
+      M.stopEls[s.stop_id] = g;
+    });
+
+    // edge node + dotted local links (sensing and actuation never leave the node)
+    const link = {stroke: "#5b6470", "stroke-width": 1.2, "stroke-dasharray": "3 4", fill: "none"};
+    el("path", {d: "M300 440 L175 430", ...link});
+    el("path", {d: "M300 440 L330 398", ...link});
+    el("path", {d: "M300 440 Q380 420 392 392", ...link});
+    nodeBox(300, 440, "OS3 · local rules");
+    el("path", {d: "M330 392 L250 334 L250 370 Z", fill: "#2f80ed", opacity: .16});
+    el("rect", {x: 324, y: 386, width: 14, height: 10, rx: 2, fill: "#2f80ed"});
+    M.radarTxt = txt("radar -", {x: 344, y: 412, "font-size": 11, "font-weight": 700, fill: "#1d232b"});
+    el("rect", {x: 386, y: 386, width: 12, height: 10, rx: 2, fill: "#7b4fbf"});
+    M.camTxt = txt("", {x: 426, y: 245, "font-size": 11, "font-weight": 700, fill: "#9a4d00", "text-anchor": "end"});
+    el("rect", {x: 172, y: 418, width: 6, height: 60, fill: "#6b7380"});
+    M.signRing = el("circle", {cx: 175, cy: 418, r: 30, fill: "#fff", stroke: "#c62828", "stroke-width": 7});
+    M.signNum = txt("-", {x: 175, y: 429, "font-size": 28, "font-weight": 800, fill: "#111", "text-anchor": "middle"});
+    M.signLeds = [[-30, -30], [30, -30], [-30, 30], [30, 30]].map(([dx, dy]) => el("circle", {cx: 175 + dx, cy: 418 + dy, r: 5, fill: "#f2a900", opacity: 0}));
+    M.signTxt = txt("", {x: 175, y: 498, "font-size": 11, "font-weight": 700, fill: "#9a4d00", "text-anchor": "middle"});
+    txt("variable speed sign", {x: 175, y: 512, "font-size": 10, fill: "#4a5059", "text-anchor": "middle"});
+    M.peds = el("g", {}); M.veh = el("g", {}); M.labels = el("g", {});
+    schematicNote();
+  }
+
+  function hlStop(id, on) {
+    const d = document.querySelector(`.stop[data-id="${id}"]`); if (d) d.classList.toggle("hl", on);
+    const g = M.stopEls && M.stopEls[id]; if (g) g.setAttribute("opacity", on ? .7 : 1);
+  }
+  function spawn(lane, bus) {
+    const q = vehicles.filter(v => v.lane === lane);
+    const lst = q.reduce((m, v) => (m && m.pos < v.pos ? m : v), null);
+    const len = bus ? 46 : 22;
+    if (lst && lst.pos - lst.len < len + GAP + 4) return false;
+    const stop = bus && S.ctx.bus_stops && S.ctx.bus_stops.stops[lane.stopIdx];
+    const routes = stop ? stop.routes.map(r => r.route_number) : ["bus"];
+    const v = {lane, pos: 0, v: 0, len, bus, f: .9 + Math.random() * .2, passed: false, dwell: 0, served: false,
+               route: bus ? routes[Math.floor(Math.random() * routes.length)] : null};
+    v.v = targetSpeed(v);
+    v.g = el("g", {}, M.veh);
+    if (bus) {
+      el("rect", {x: -len / 2, y: -7, width: len, height: 14, rx: 3, fill: "#1a8f6a", stroke: "#0f5c44"}, v.g);
+      el("rect", {x: -len / 2 + 4, y: -4, width: len - 10, height: 8, rx: 1.5, fill: "#bfe9da", opacity: .8}, v.g);
+      v.lab = el("g", {}, M.labels);
+      el("rect", {x: -16, y: -9, width: 32, height: 14, rx: 3, fill: "#0f5c44"}, v.lab);
+      txt(v.route, {x: 0, y: 2, "font-size": 9, "font-weight": 700, fill: "#fff", "text-anchor": "middle"}, v.lab);
+    } else {
+      el("rect", {x: -len / 2, y: -5.5, width: len, height: 11, rx: 3, fill: PAL[Math.floor(Math.random() * PAL.length)]}, v.g);
+      el("rect", {x: len / 2 - 8, y: -4, width: 4, height: 8, rx: 1, fill: "#d8e3f0"}, v.g);
+    }
+    vehicles.push(v);
+    return true;
+  }
+  function targetSpeed(v) {
+    const kmh = V.radar == null ? 40 : V.radar;
+    return Math.max(15, kmh) * K * v.f * (v.lane.grp === "NS" ? .85 : 1);
+  }
+  function mustStop(v, light) {
+    if (v.passed || light === "G") return false;
+    if (light === "R") return true;
+    return v.lane.stop - v.pos > (v.v * v.v) / (2 * B) + 2;      // amber: stop only if you can
+  }
+  function stepVehicles(dt, ph) {
+    for (const lane of LANES) {
+      const q = vehicles.filter(v => v.lane === lane).sort((a, b) => b.pos - a.pos);
+      q.forEach((v, i) => {
+        let lim = i ? q[i - 1].pos - q[i - 1].len - GAP : Infinity;
+        if (!v.passed && v.pos > lane.stop) v.passed = true;
+        if (mustStop(v, ph[lane.grp])) lim = Math.min(lim, lane.stop - 1);
+        if (v.bus && !v.served && v.pos <= lane.bus) {
+          lim = Math.min(lim, lane.bus);
+          if (lane.bus - v.pos < 1.5 && v.v < 8) { v.dwell += dt; if (v.dwell > 3.5) v.served = true; }
+        }
+        const vAllowed = Math.sqrt(2 * B * Math.max(0, lim - v.pos));
+        v.v = Math.min(v.v + A * dt, targetSpeed(v), vAllowed);
+        v.pos = Math.min(v.pos + v.v * dt, Math.max(v.pos, lim));
+      });
+    }
+    vehicles = vehicles.filter(v => {
+      if (v.pos - v.len > v.lane.len) { v.g.remove(); if (v.lab) v.lab.remove(); return false; }
+      return true;
+    });
+    for (const v of vehicles) {
+      const c = v.lane.s0 + v.lane.d * (v.pos - v.len / 2);
+      const [x, y] = v.lane.axis === "x" ? [c, v.lane.fix] : [v.lane.fix, c];
+      const rot = v.lane.axis === "x" ? (v.lane.d > 0 ? 0 : 180) : (v.lane.d > 0 ? 90 : -90);
+      v.g.setAttribute("transform", `translate(${x.toFixed(1)} ${y.toFixed(1)}) rotate(${rot})`);
+      if (v.lab) v.lab.setAttribute("transform", `translate(${x.toFixed(1)} ${(y + 2).toFixed(1)})`);   // route number on the bus
+    }
+  }
+  function newPed(side) {
+    const p = {x: 417 + Math.random() * 26, y: side ? 374 + Math.random() * 13 : 253 + Math.random() * 13, side,
+               st: "wait", sp: 28 + Math.random() * 16, op: 0};
+    p.c = el("circle", {cx: p.x, cy: p.y, r: 3.6, fill: "#f08c00", stroke: "#8a4b00", "stroke-width": .8, opacity: 0}, M.peds);
+    peds.push(p);
+  }
+  function stepPeds(dt, ph) {
+    const target = V.peds == null ? 0 : Math.max(0, Math.min(40, Math.round(V.peds)));
+    const present = peds.filter(p => p.st !== "gone");
+    if (present.length < target) newPed(Math.random() < .5 ? 0 : 1);
+    else if (present.length > target) { const w = present.find(p => p.st === "wait"); if (w) w.st = "gone"; }
+    for (const p of peds) {
+      if (p.st === "wait" && ph.walk && Math.random() < 2.5 * dt) p.st = "cross";
+      if (p.st === "cross") {
+        const ty = p.side ? 258 : 382;
+        p.y += Math.sign(ty - p.y) * p.sp * dt;
+        if (Math.abs(ty - p.y) < 2) p.st = "gone";
+      }
+      p.op = p.st === "gone" ? p.op - 2 * dt : Math.min(1, p.op + 2 * dt);
+      p.c.setAttribute("cx", p.x.toFixed(1)); p.c.setAttribute("cy", p.y.toFixed(1)); p.c.setAttribute("opacity", Math.max(0, p.op).toFixed(2));
+    }
+    peds = peds.filter(p => { if (p.st === "gone" && p.op <= 0) { p.c.remove(); return false; } return true; });
+  }
+  function frame(dt, now) {
+    simT += dt;
+    const ph = phase(simT);
+    for (const g of ["EW", "NS"]) M.sig[g].forEach(c => c.setAttribute("fill", LIGHT[ph[g]]));
+    M.walk.forEach(r => r.setAttribute("fill", ph.walk ? "#2ecc71" : "#e74c3c"));
+    for (const lane of LANES) if (Math.random() < lane.rate * dt) spawn(lane, false);
+    busTimer -= dt;
+    if (busTimer <= 0) { if (spawn(LANES[busSide ? 1 : 2], true)) { busSide ^= 1; busTimer = 9 + Math.random() * 8; } }
+    stepVehicles(dt, ph);
+    stepPeds(dt, ph);
+    const blink = Math.floor(now / 450) % 2 === 0;
+    M.signLeds.forEach(c => c.setAttribute("opacity", V.active && blink ? 1 : 0));
+    const surge = V.threshold != null && V.peds != null && V.peds > V.threshold;
+    M.cwGlow.setAttribute("opacity", surge ? (.55 + .45 * Math.sin(now / 180)).toFixed(2) : 0);
+  }
+  function render(live) {
+    const rule = ruleFor(SIGN);
+    V.radar = last(live.readings.RADAR_SPEED);
+    V.peds = last(live.readings.PED_CROSSWALK_COUNT);
+    V.threshold = rule ? rule.threshold : null;
+    const sign = actuator(live, SIGN);
+    V.limit = sign.value; V.active = !!sign.active; V.remaining = sign.remaining_s || 0;
+    M.signNum.textContent = V.limit == null ? "-" : Math.round(V.limit);
+    M.signRing.setAttribute("stroke", V.active ? "#e8a400" : "#c62828");
+    M.signTxt.textContent = V.active ? `surge rule · ${Math.ceil(V.remaining)} s left` : "";
+    const over = V.radar != null && V.limit != null && V.radar > V.limit;
+    M.radarTxt.textContent = V.radar == null ? "radar -" : `radar ${V.radar.toFixed(0)} km/h`;
+    M.radarTxt.setAttribute("fill", over ? "#b3261e" : "#1d232b");
+    const surge = V.peds != null && V.threshold != null && V.peds > V.threshold;
+    M.camTxt.textContent = V.peds == null ? "" : surge ? `SURGE ${Math.round(V.peds)} people > ${V.threshold}` : `${Math.round(V.peds)} at crosswalk`;
+    M.camTxt.setAttribute("fill", surge ? "#b3261e" : "#4a5059");
+  }
+  function extra(ctx) {
+    const bs = ctx.bus_stops;
+    if (!bs) return {title: "Bus stops", html: '<div class="small mute">No reference data configured.</div>'};
+    return {title: "Bus stops (OS3-1 context)",
+      html: `<div class="small mute">${esc(bs.source)} · reference date ${esc(bs.reference_date)}</div>` + bs.stops.map(s =>
+        `<div class="stop" data-id="${esc(s.stop_id)}"><b>${esc(s.stop_name)}</b> <span class="mono mute">${esc(s.stop_id)}</span>
+         <div class="chips">${s.routes.map(r => `<span class="chip" title="direction ${esc(r.direction)}">${esc(r.route_number)}</span>`).join("")}</div></div>`).join(""),
+      init() {
+        document.querySelectorAll(".stop").forEach(d => {
+          d.addEventListener("mouseenter", () => hlStop(d.dataset.id, true));
+          d.addEventListener("mouseleave", () => hlStop(d.dataset.id, false));
+        });
+      }};
+  }
+  return {
+    title: "OS3-5 · Techno-Park intersection", nodeSub: "OS3", draw, frame, render, extra,
+    offlineText: "the intersection runs on the edge node",
+    act: {name: SIGN, title: "Variable speed sign", unit: "km/h", fmt: v => v == null ? "-" : Math.round(v),
+          activeBadge: "command active", idleBadge: "default"},
+    guide(name) {
+      if (name === "RADAR_SPEED") return V.limit == null ? null : [V.limit, `limit ${V.limit}`];
+      return undefined;
+    },
+    decimals: {RADAR_SPEED: 1, PED_CROSSWALK_COUNT: 0},
+    legend: `<span><i style="background:#3d6fb6"></i>car (speed = latest radar reading)</span>
+      <span><i style="background:#1a8f6a"></i>bus (illustrative, real route numbers)</span>
+      <span><i style="background:#f08c00;border-radius:50%"></i>pedestrian (count = latest crosswalk reading)</span>
+      <span><i style="background:#fff;border:2px solid #c62828;border-radius:50%"></i>variable speed sign (actuator state from the node)</span>`,
+    foot: "Live data from this node: radar speed, crosswalk count, sign state and TTL, decisions, outbox and receiver counts. "
+      + "Drawn by the page: car and pedestrian movement (from those readings), the signal plan and buses (illustrative; route numbers are real). "
+      + "Bus stop names and routes are Incheon BIS data; their positions are schematic because the source CSV has no coordinates.",
+  };
+})();
+
+// ===================================================================== OS2 · Central Park robot
+SCENES.os2_park = (() => {
+  const LATCH = "SAFETY_ESTOP_LATCH";
+  const SPEED = 0.5;          // m/s, as in OS2-5 (s5_offline_navigation.py)
+  const RELEASE = 1.0;        // m, release distance of the OS2-3 latch (hysteresis)
+  const MIN_STOP_MS = 1200;   // keep a stop on screen long enough to see it
+  const PX = 80;              // close-up scale: px per metre
+  const RX = 690, RY = 235;   // robot position in the close-up
+  const BOX = {x: 25, y: 50, w: 575, h: 560};
+  const M = {};
+  let pts = [], cum = [], total = 0, s = 0, dir = 1, reached = 0;
+  let stopped = false, stopSince = 0, lastT = null, lidar = 3, lidarTarget = 3, scroll = 0, kind = "pedestrian";
+  let markers = [];
+
+  function project(ctx) {
+    const f = ctx.path && ctx.path.features.find(x => x.geometry && x.geometry.type === "LineString");
+    if (!f) return false;
+    const c = f.geometry.coordinates;
+    const lat0 = c.reduce((a, p) => a + p[1], 0) / c.length, lon0 = c.reduce((a, p) => a + p[0], 0) / c.length;
+    const kx = Math.cos(lat0 * Math.PI / 180) * 111320, ky = 110540;
+    const m = c.map(p => [(p[0] - lon0) * kx, (p[1] - lat0) * ky]);
+    const xs = m.map(p => p[0]), ys = m.map(p => p[1]);
+    const w = Math.max(...xs) - Math.min(...xs), h = Math.max(...ys) - Math.min(...ys);
+    const k = Math.min((BOX.w - 60) / w, (BOX.h - 90) / h);
+    const ox = BOX.x + (BOX.w - w * k) / 2, oy = BOX.y + 30 + (BOX.h - 60 - h * k) / 2;
+    pts = m.map(p => [ox + (p[0] - Math.min(...xs)) * k, oy + (Math.max(...ys) - p[1]) * k]);
+    cum = [0];
+    for (let i = 1; i < m.length; i++) cum.push(cum[i - 1] + Math.hypot(m[i][0] - m[i - 1][0], m[i][1] - m[i - 1][1]));
+    total = cum[cum.length - 1];
+    M.name = (f.properties && f.properties.name) || "path";
+    M.k = k;
+    return true;
+  }
+  function at(sm) {                 // screen point + heading at distance sm (metres) along the path
+    let i = 1;
+    while (i < cum.length - 1 && cum[i] < sm) i++;
+    const t = (sm - cum[i - 1]) / Math.max(1e-9, cum[i] - cum[i - 1]);
+    const a = pts[i - 1], b = pts[i];
+    return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, Math.atan2(b[1] - a[1], b[0] - a[0])];
+  }
+  function draw(ctx) {
+    el("rect", {x: 0, y: 0, width: 1000, height: 640, fill: "#e9efe4"});
+    el("rect", {x: BOX.x, y: BOX.y, width: BOX.w, height: BOX.h, rx: 10, fill: "#cfe3c4", stroke: "#b5cfa8"});
+    txt("Songdo Central Park", {x: BOX.x + 14, y: BOX.y + 24, "font-size": 13, "font-weight": 700, fill: "#2f5a2a"});
+    if (!project(ctx)) { txt("No path GeoJSON configured (paths.path_geojson)", {x: 300, y: 320, "text-anchor": "middle"}); return; }
+    // trees: deterministic, kept off the path
+    const r = rng(2026), d = (x, y) => Math.min(...pts.map(p => Math.hypot(p[0] - x, p[1] - y)));
+    for (let i = 0; i < 160; i++) {
+      const x = BOX.x + 15 + r() * (BOX.w - 30), y = BOX.y + 40 + r() * (BOX.h - 55);
+      if (d(x, y) > 16) el("circle", {cx: x, cy: y, r: 4 + r() * 5, fill: r() < .5 ? "#a9cf98" : "#9cc58a", opacity: .9});
+    }
+    const line = pts.map(p => p.map(v => v.toFixed(1)).join(",")).join(" ");
+    el("polyline", {points: line, fill: "none", stroke: "#d8c9a3", "stroke-width": 11, "stroke-linecap": "round", "stroke-linejoin": "round"});
+    el("polyline", {points: line, fill: "none", stroke: "#efe5cb", "stroke-width": 7, "stroke-linecap": "round", "stroke-linejoin": "round"});
+    M.trail = el("polyline", {points: "", fill: "none", stroke: "#2f80ed", "stroke-width": 3, opacity: .55, "stroke-linecap": "round"});
+    const a = pts[0], b = pts[pts.length - 1];
+    txt("start", {x: a[0] - 8, y: a[1] - 10, "font-size": 10, fill: "#2f5a2a", "text-anchor": "end"});
+    txt("end", {x: b[0] + 8, y: b[1] + 14, "font-size": 10, fill: "#2f5a2a"});
+    txt(`${M.name} · ${Math.round(total)} m`, {x: BOX.x + BOX.w - 14, y: BOX.y + BOX.h - 14, "font-size": 10.5, fill: "#3f6b39", "text-anchor": "end"});
+    M.markers = el("g", {});
+    M.halo = el("circle", {r: 14, fill: "#e53935", opacity: 0});
+    M.robot = el("g", {});
+    el("circle", {r: 7, fill: "#1d5fb4", stroke: "#fff", "stroke-width": 2}, M.robot);
+    el("path", {d: "M5 -4 L12 0 L5 4 Z", fill: "#1d5fb4"}, M.robot);
+    // scale bar
+    const sb = 100 * M.k;
+    el("line", {x1: BOX.x + 20, y1: BOX.y + BOX.h - 18, x2: BOX.x + 20 + sb, y2: BOX.y + BOX.h - 18, stroke: "#3f6b39", "stroke-width": 2});
+    txt("100 m", {x: BOX.x + 20 + sb / 2, y: BOX.y + BOX.h - 24, "font-size": 9.5, fill: "#3f6b39", "text-anchor": "middle"});
+
+    // close-up: the robot's own frame, real LiDAR distance
+    const CX = 620, CY = 50, CW = 365, CH = 340;
+    el("rect", {x: CX, y: CY, width: CW, height: CH, rx: 10, fill: "#f4f6f8", stroke: "#cfd6de"});
+    txt("LiDAR close-up (robot frame)", {x: CX + 14, y: CY + 22, "font-size": 12.5, "font-weight": 700, fill: "#1d232b"});
+    const clip = el("clipPath", {id: "cu"}); el("rect", {x: CX + 1, y: CY + 32, width: CW - 2, height: CH - 33}, clip);
+    const g = el("g", {"clip-path": "url(#cu)"});
+    el("rect", {x: CX, y: RY - 42, width: CW, height: 84, fill: "#efe5cb"}, g);
+    M.dash = el("g", {}, g);
+    for (let i = 0; i < 14; i++) el("rect", {x: CX + i * 40, y: RY - 1.5, width: 20, height: 3, fill: "#d8c9a3"}, M.dash);
+    el("path", {d: `M${RX} ${RY} L${RX + 3.6 * PX} ${RY - 70} A 300 300 0 0 1 ${RX + 3.6 * PX} ${RY + 70} Z`, fill: "#2f80ed", opacity: .08}, g);
+    for (const m of [1, 2, 3]) {
+      el("line", {x1: RX + m * PX, y1: RY + 50, x2: RX + m * PX, y2: RY + 56, stroke: "#8a96a3"}, g);
+      txt(`${m} m`, {x: RX + m * PX, y: RY + 68, "font-size": 9, fill: "#66707c", "text-anchor": "middle"}, g);
+    }
+    M.ring = el("circle", {cx: RX, cy: RY, r: .8 * PX, fill: "#e53935", "fill-opacity": .06, stroke: "#e53935", "stroke-width": 2}, g);
+    el("circle", {cx: RX, cy: RY, r: RELEASE * PX, fill: "none", stroke: "#f08c00", "stroke-width": 1.5, "stroke-dasharray": "5 4"}, g);
+    txt("0.8 m stop", {x: RX, y: RY - .8 * PX - 5, "font-size": 9.5, fill: "#c62828", "text-anchor": "middle"}, g);
+    txt("1.0 m release", {x: RX, y: RY + RELEASE * PX + 12, "font-size": 9.5, fill: "#b25f00", "text-anchor": "middle"}, g);
+    M.beam = el("line", {x1: RX, y1: RY, x2: RX, y2: RY, stroke: "#2f80ed", "stroke-width": 1.5, "stroke-dasharray": "2 3"}, g);
+    M.hit = el("circle", {cx: RX, cy: RY, r: 5, fill: "#2f80ed"}, g);
+    M.obst = el("g", {opacity: 0}, g);
+    el("circle", {cx: 0, cy: -9, r: 6, fill: "#f08c00", stroke: "#8a4b00"}, M.obst);
+    el("rect", {x: -5, y: -3, width: 10, height: 16, rx: 3, fill: "#f08c00", stroke: "#8a4b00"}, M.obst);
+    M.obstTxt = txt("", {x: 0, y: -20, "font-size": 10, "font-weight": 700, fill: "#9a4d00", "text-anchor": "middle"}, M.obst);
+    M.cuRobot = el("g", {transform: `translate(${RX} ${RY})`}, g);
+    el("rect", {x: -16, y: -12, width: 32, height: 24, rx: 6, fill: "#1d5fb4", stroke: "#0d3c7a"}, M.cuRobot);
+    el("path", {d: "M10 -6 L18 0 L10 6 Z", fill: "#fff"}, M.cuRobot);
+    M.lidarTxt = txt("LiDAR -", {x: CX + 14, y: CY + 52, "font-size": 12, "font-weight": 700, fill: "#1d232b"});
+    M.imuTxt = txt("IMU -", {x: CX + 14, y: CY + 70, "font-size": 11, fill: "#4a5059"});
+    txt("Distance = the node's latest LIDAR_PROXIMITY_M reading", {x: CX + 14, y: CY + CH - 12, "font-size": 9.5, fill: "#66707c"});
+
+    // robot status panel (the edge node rides on the robot)
+    const PY = 405;
+    el("rect", {x: CX, y: PY, width: CW, height: 205, rx: 10, fill: "#fff", stroke: "#cfd6de"});
+    M.state = txt("-", {x: CX + 16, y: PY + 36, "font-size": 24, "font-weight": 800, fill: "#1f7a3a"});
+    M.stateSub = txt("", {x: CX + 16, y: PY + 56, "font-size": 11, fill: "#4a5059"});
+    M.odo = txt("", {x: CX + 16, y: PY + 86, "font-size": 12, fill: "#1d232b"});
+    M.stops = txt("", {x: CX + 16, y: PY + 106, "font-size": 12, fill: "#1d232b"});
+    M.rej = txt("", {x: CX + 16, y: PY + 126, "font-size": 11, fill: "#66707c"});
+    nodeBox(CX + 80, PY + 150, "OS2 · on the robot");
+    txt("Path: APPROXIMATE (SAMPLE) geometry", {x: 990, y: 630, "font-size": 10, fill: "#6b7380", "text-anchor": "end"});
+  }
+  function trigger(v, now) {
+    if (!stopped) {
+      stopped = true; stopSince = now; kind = Math.random() < .8 ? "pedestrian" : "dog";
+      const [x, y] = at(s);
+      const m = el("g", {}, M.markers);
+      el("circle", {cx: x, cy: y, r: 5, fill: "#fff", stroke: "#e53935", "stroke-width": 2}, m);
+      el("path", {d: `M${x - 2.5} ${y - 2.5} L${x + 2.5} ${y + 2.5} M${x + 2.5} ${y - 2.5} L${x - 2.5} ${y + 2.5}`, stroke: "#e53935", "stroke-width": 1.6}, m);
+      markers.push(m);
+      if (markers.length > 60) markers.shift().remove();
+    }
+    lidarTarget = v;
+  }
+  function render(live) {
+    const now = performance.now();
+    const rule = ruleFor(LATCH), thr = rule ? rule.threshold : .8;
+    const ser = live.readings.LIDAR_PROXIMITY_M || [];
+    if (lastT == null) lastT = ser.length ? ser[ser.length - 1].t : 0;      // no replay of old readings
+    for (const r of ser) {
+      if (r.t <= lastT) continue;
+      lastT = r.t;
+      if (r.v < thr) trigger(r.v, now);
+      else { lidarTarget = r.v; if (stopped && r.v >= RELEASE) M.releaseAt = Math.max(now, stopSince + MIN_STOP_MS); }
+    }
+    const imu = last(live.readings.IMU_YAW_RATE);
+    M.imuTxt.textContent = imu == null ? "IMU -" : `IMU yaw rate ${imu.toFixed(2)} deg/s`;
+    const c = live.decision_counts || {};
+    M.stops.textContent = `E-stops dispatched by the node: ${c.DISPATCHED || 0}`;
+    M.rej.textContent = (c.EXPIRED || c.SUPERSEDED) ? `rejected: ${c.EXPIRED || 0} expired, ${c.SUPERSEDED || 0} superseded (TTL ${rule ? rule.ttl_s : "?"} s)` : `command TTL ${rule ? rule.ttl_s : "?"} s`;
+  }
+  function frame(dt, now) {
+    if (!pts.length) return;
+    if (stopped && M.releaseAt && now >= M.releaseAt) { stopped = false; M.releaseAt = null; }
+    if (!stopped) {
+      s += dir * SPEED * dt;
+      if (s >= total) { s = total; dir = -1; } else if (s <= 0) { s = 0; dir = 1; }
+      reached = Math.max(reached, s);
+      scroll = (scroll + SPEED * PX * dt) % 40;
+    }
+    const [x, y, h] = at(s);
+    M.robot.setAttribute("transform", `translate(${x.toFixed(1)} ${y.toFixed(1)}) rotate(${(h * 180 / Math.PI + (dir < 0 ? 180 : 0)).toFixed(1)})`);
+    M.halo.setAttribute("cx", x.toFixed(1)); M.halo.setAttribute("cy", y.toFixed(1));
+    M.halo.setAttribute("opacity", stopped ? (.25 + .2 * Math.sin(now / 150)).toFixed(2) : 0);
+    if (Math.floor(now / 500) !== M.tick) {
+      M.tick = Math.floor(now / 500);
+      const tp = [];
+      for (let d = 0; d <= reached; d += 4) tp.push(at(d));
+      tp.push(at(reached));
+      M.trail.setAttribute("points", tp.map(p => `${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(" "));
+    }
+    M.dash.setAttribute("transform", `translate(${(-scroll).toFixed(1)} 0)`);
+    lidar += (lidarTarget - lidar) * Math.min(1, dt * 6);
+    const d = Math.min(3.6, Math.max(.2, lidar)), hx = RX + d * PX;
+    M.beam.setAttribute("x2", hx.toFixed(1)); M.hit.setAttribute("cx", hx.toFixed(1));
+    M.hit.setAttribute("fill", lidar < .8 ? "#e53935" : "#2f80ed");
+    M.obst.setAttribute("opacity", stopped ? 1 : 0);
+    M.obst.setAttribute("transform", `translate(${(hx + 8).toFixed(1)} ${RY})`);
+    M.obstTxt.textContent = kind;
+    M.ring.setAttribute("fill-opacity", stopped ? (.18 + .1 * Math.sin(now / 150)).toFixed(2) : .06);
+    M.lidarTxt.textContent = `LiDAR nearest object ${lidar.toFixed(2)} m`;
+    M.lidarTxt.setAttribute("fill", lidar < .8 ? "#c62828" : "#1d232b");
+    M.state.textContent = stopped ? "E-STOP" : "DRIVING";
+    M.state.setAttribute("fill", stopped ? "#c62828" : "#1f7a3a");
+    M.stateSub.textContent = stopped ? `${kind} closer than 0.8 m; moves on when LiDAR reads ≥ ${RELEASE} m`
+                                     : `${SPEED} m/s along the path${S.live && !S.live.wan_online ? " · no WAN needed" : ""}`;
+    M.odo.textContent = `Driven ${Math.round(reached)} m of ${Math.round(total)} m`;
+  }
+  return {
+    title: "OS2-5 · Central Park robot", draw, frame, render,
+    offlineText: "the robot keeps driving and stopping on its own",
+    act: {name: LATCH, title: "Safety e-stop latch", unit: "", fmt: v => v == null ? "-" : (v >= 1 ? "LATCHED" : "CLEAR"),
+          activeBadge: "e-stop active", idleBadge: "clear"},
+    decimals: {LIDAR_PROXIMITY_M: 2, IMU_YAW_RATE: 2},
+    legend: `<span><i style="background:#1d5fb4;border-radius:50%"></i>robot (moves at 0.5 m/s, drawn)</span>
+      <span><i style="background:#fff;border:2px solid #e53935;border-radius:50%"></i>place of an e-stop</span>
+      <span><i style="background:#f08c00"></i>obstacle at the real LiDAR distance</span>
+      <span><i style="background:#efe5cb;border:1px solid #d8c9a3"></i>Central Park path (SAMPLE GeoJSON)</span>`,
+    foot: "Live data from this node: LiDAR distance and IMU yaw rate, every e-stop decision, outbox and receiver counts. "
+      + "Drawn by the page: the robot's position (0.5 m/s along the path, as in OS2-5) and the obstacle type. A stop is drawn when the "
+      + "node stores a reading under 0.8 m and lifted when a later reading is ≥ 1.0 m (the OS2-3 hysteresis). "
+      + "The path is the repo's APPROXIMATE Central Park GeoJSON, not surveyed data.",
+  };
+})();
+
+// ===================================================================== OS5 · Waterfront sluice
+SCENES.os5_sluice = (() => {
+  const GATE = "BACKUP_SLUICE_GATE_OPEN";
+  const Y0 = 560, PXM = 110;          // lake bed (0 m) and px per metre
+  const Y = m => Y0 - m * PXM;
+  const M = {};
+  let level = null, levelTarget = 2, gate = 0, gateTarget = 0, flow = 0, procPid = null, flashUntil = 0;
+
+  function draw(ctx) {
+    el("rect", {x: 0, y: 0, width: 1000, height: 640, fill: "#e8f1f8"});
+    // waterfront skyline (illustrative)
+    [[640, 70, 50, 80], [700, 40, 40, 110], [750, 85, 70, 65], [830, 55, 45, 95], [885, 95, 80, 55]].forEach(b =>
+      el("rect", {x: b[0], y: b[1], width: b[2], height: b[3], fill: "#c9d6e2"}));
+    // ground and lake basin
+    el("path", {d: `M0 150 L30 150 L40 ${Y0} L540 ${Y0} L540 150 L1000 150 L1000 640 L0 640 Z`, fill: "#b9a68a"});
+    el("rect", {x: 0, y: 144, width: 1000, height: 8, fill: "#8d7b62"});
+    txt("Waterfront lake", {x: 290, y: 140, "font-size": 13, "font-weight": 700, fill: "#24527a", "text-anchor": "middle"});
+    M.water = el("rect", {x: 40, y: Y(2), width: 500, height: 2 * PXM, fill: "#5b9bd5", opacity: .85});
+    M.wave = el("path", {d: "", fill: "none", stroke: "#cfe5f7", "stroke-width": 2});
+    // relief channel (lower than the lake bed)
+    el("rect", {x: 600, y: 520, width: 400, height: 80, fill: "#a2906f"});
+    el("rect", {x: 600, y: 600, width: 400, height: 6, fill: "#8d7b62"});
+    M.chan = el("rect", {x: 600, y: 600, width: 400, height: 0, fill: "#5b9bd5", opacity: .85});
+    M.flowG = el("g", {opacity: 0});
+    for (let i = 0; i < 9; i++) el("path", {d: `M${610 + i * 45} 584 l14 0 l-5 -4 m5 4 l-5 4`, stroke: "#e8f4fd", "stroke-width": 2, fill: "none"}, M.flowG);
+    txt("relief channel → sea", {x: 800, y: 512, "font-size": 11.5, "font-weight": 650, fill: "#5d4b33", "text-anchor": "middle"});
+    // concrete gate structure with an opening at the bottom
+    el("rect", {x: 540, y: 120, width: 60, height: 400, fill: "#9aa3ad", stroke: "#7d8792"});
+    el("rect", {x: 540, y: 440, width: 60, height: 160, fill: "#6f7a86"});
+    M.gate = el("rect", {x: 552, y: 430, width: 36, height: 170, fill: "#d35400", stroke: "#8e3800", "stroke-width": 2});
+    el("rect", {x: 528, y: 92, width: 84, height: 30, rx: 3, fill: "#596572"});
+    txt("gate house", {x: 570, y: 111, "font-size": 10, fill: "#fff", "text-anchor": "middle"});
+    M.gateTxt = txt("", {x: 570, y: 80, "font-size": 12, "font-weight": 800, fill: "#1d232b", "text-anchor": "middle"});
+    // staff gauge 0..3.5 m
+    el("rect", {x: 58, y: Y(3.5), width: 20, height: 3.5 * PXM, fill: "#fff", stroke: "#8a96a3"});
+    for (let m = 0; m <= 3.5 + 1e-9; m += .5) {
+      el("line", {x1: 58, y1: Y(m), x2: m % 1 === 0 ? 78 : 70, y2: Y(m), stroke: "#1d232b"});
+      if (m % 1 === 0) txt(`${m} m`, {x: 82, y: Y(m) + 4, "font-size": 10, fill: "#1d232b"});
+    }
+    const thr = (ruleFor(GATE) || {}).threshold ?? 2.8;
+    el("line", {x1: 40, y1: Y(thr), x2: 540, y2: Y(thr), stroke: "#c62828", "stroke-width": 2, "stroke-dasharray": "8 6"});
+    txt(`flood threshold ${thr} m · rule: level > ${thr} → open gate`, {x: 530, y: Y(thr) - 6, "font-size": 11, "font-weight": 650, fill: "#c62828", "text-anchor": "end"});
+    M.levelTxt = txt("-", {x: 300, y: Y(2) + 22, "font-size": 18, "font-weight": 800, fill: "#fff", "text-anchor": "middle"});
+    M.floodTxt = txt("", {x: 300, y: 185, "font-size": 15, "font-weight": 800, fill: "#c62828", "text-anchor": "middle"});
+    // node, mains
+    nodeBox(728, 185, "OS5 · gate control");
+    el("path", {d: "M676 203 L612 203", stroke: "#5b6470", "stroke-width": 1.2, "stroke-dasharray": "3 4"});
+    M.mains = txt("mains -", {x: 860, y: 205, "font-size": 12, "font-weight": 700, fill: "#1d232b"});
+    M.proc = txt("Processor -", {x: 674, y: 245, "font-size": 11.5, fill: "#1d232b"});
+    M.flash = el("g", {opacity: 0});
+    el("rect", {x: 640, y: 262, width: 340, height: 28, rx: 5, fill: "#8a5a00"}, M.flash);
+    M.flashTxt = txt("", {x: 810, y: 281, "font-size": 12, "font-weight": 700, fill: "#fff", "text-anchor": "middle"}, M.flash);
+    schematicNote("Cross-section, not to scale · water levels are SIMULATED");
+  }
+  function flashMsg(msg, ms) { M.flashTxt.textContent = msg; flashUntil = performance.now() + (ms || 6000); }
+  function render(live) {
+    const v = last(live.readings.SLUICE_WATER_LEVEL_M);
+    if (v != null) { levelTarget = v; if (level == null) level = v; }
+    const volts = last(live.readings.MAINS_VOLT);
+    M.mains.textContent = volts == null ? "mains -" : `mains ${volts.toFixed(1)} V`;
+    const g = actuator(live, GATE);
+    gateTarget = g.value >= 1 ? 1 : 0;
+    M.gateTxt.textContent = g.value >= 1 ? `GATE OPEN · ${Math.ceil(g.remaining_s || 0)} s` : "GATE CLOSED";
+    M.gateTxt.setAttribute("fill", g.value >= 1 ? "#d35400" : "#1d232b");
+    const p = (live.processes || []).find(x => x.name === "Processor");
+    if (p) {
+      if (procPid != null && p.pid !== procPid) flashMsg(`Processor restarted by the supervisor: PID ${procPid} → ${p.pid}`);
+      procPid = p.pid;
+      M.proc.textContent = `Processor PID ${p.pid} · restarts ${p.restarts || 0}`;
+    }
+  }
+  function frame(dt, now) {
+    if (level == null) return;
+    level += Math.sign(levelTarget - level) * Math.min(Math.abs(levelTarget - level), 1.2 * dt);
+    gate += Math.sign(gateTarget - gate) * Math.min(Math.abs(gateTarget - gate), .6 * dt);
+    flow += ((gate > .05 ? gate : 0) - flow) * Math.min(1, dt * 2);
+    const top = Y(level);
+    M.water.setAttribute("y", top.toFixed(1)); M.water.setAttribute("height", (Y0 - top).toFixed(1));
+    let d = `M40 ${top.toFixed(1)}`;
+    for (let x = 40; x <= 540; x += 20) d += ` L${x} ${(top + 2.5 * Math.sin(x / 18 + now / 400)).toFixed(1)}`;
+    M.wave.setAttribute("d", d);
+    M.levelTxt.setAttribute("y", Math.min(Y0 - 8, top + 24).toFixed(1));
+    M.levelTxt.textContent = `${level.toFixed(2)} m`;
+    const thr = (ruleFor(GATE) || {}).threshold ?? 2.8;
+    M.floodTxt.textContent = levelTarget > thr ? `FLOOD READING ${levelTarget.toFixed(2)} m > ${thr} m` : "";
+    M.gate.setAttribute("y", (430 - gate * 140).toFixed(1));
+    const h = 40 * flow;
+    M.chan.setAttribute("y", (600 - h).toFixed(1)); M.chan.setAttribute("height", h.toFixed(1));
+    M.flowG.setAttribute("opacity", flow > .1 ? flow.toFixed(2) : 0);
+    M.flowG.setAttribute("transform", `translate(${((now / 25) % 45).toFixed(1)} 0)`);
+    M.flash.setAttribute("opacity", now < flashUntil ? 1 : 0);
+  }
+  function extra(ctx) {
+    if (!ctx.faults.includes("kill_processor")) return null;
+    return {title: "Compound failure (OS5-5)", top: true,
+      html: `<div class="small">Cut the WAN and kill the Processor at the same moment, during a flood. The supervisor
+        restarts it, the gate still opens locally, and every flood event is delivered after the WAN returns.</div>
+        <div class="btns"><button class="act danger" id="kWan">WAN cut + kill Processor</button>
+        <button class="act" id="kOnly">Kill Processor only (SIGKILL)</button></div>
+        <div class="small" id="faultMsg"></div>
+        <ol class="steps"><li>Press <b>WAN cut + kill Processor</b>.</li><li>Watch the Processor PID change (Node processes) and the gate open on the next reading above 2.8 m.</li>
+        <li>Press <b>Restore WAN Connection</b>: the outbox drains, Store and forward says <b>conserved</b>.</li></ol>`,
+      init() {
+        $("kWan").onclick = () => kill(true);
+        $("kOnly").onclick = () => kill(false);
+      }};
+  }
+  async function kill(cutWan) {
+    const msg = $("faultMsg");
+    try {
+      if (cutWan) await fetch("/api/wan/cut", {method: "POST"});
+      const r = await fetch("/api/fault/kill-processor", {method: "POST"});
+      const b = await r.json();
+      if (!r.ok) throw new Error(b.error || "HTTP " + r.status);
+      msg.innerHTML = `<span style="color:var(--bad)">SIGKILL sent to Processor PID ${b.pid}${cutWan ? " and WAN cut" : ""} at ${fmtTime(b.ts)}.</span>`;
+      flashMsg(`SIGKILL → Processor PID ${b.pid}${cutWan ? " + WAN cut" : ""}`, 3000);
+    } catch (e) { msg.innerHTML = `<span style="color:var(--bad)">${esc(e.message)}</span>`; }
+    poll();
+  }
+  return {
+    title: "OS5-5 · Waterfront sluice gate", draw, frame, render, extra,
+    offlineText: "the sluice gate is controlled by the edge node",
+    act: {name: GATE, title: "Backup sluice gate", unit: "", fmt: v => v == null ? "-" : (v >= 1 ? "OPEN" : "CLOSED"),
+          activeBadge: "command active", idleBadge: "closed"},
+    decimals: {SLUICE_WATER_LEVEL_M: 2, MAINS_VOLT: 1},
+    legend: `<span><i style="background:#5b9bd5"></i>lake water (height = latest level reading)</span>
+      <span><i style="background:#d35400"></i>sluice gate (actuator state from the node)</span>
+      <span><i style="background:#fff;border:2px dashed #c62828"></i>flood threshold of the rule</span>`,
+    foot: "Live data from this node: water level and mains voltage, the gate state and its TTL, decisions, outbox and receiver counts, "
+      + "and the Processor's PID and restart count. Drawn by the page: the cross-section, the water and gate motion. "
+      + "The water levels are SIMULATED by the node's sensor generator (as in the repo's source registry).",
+  };
+})();
+
+// ===================================================================== OS1 · Songdo Convensia
+SCENES.os1_building = (() => {
+  const DAMPER = "HVAC_DAMPER_PCT";
+  const BOX = {x: 20, y: 50, w: 545, h: 560};
+  const ROOM = {x: 600, y: 110, w: 370, h: 330};
+  const M = {};
+  let co2 = null, occ = 0, damper = 0, damperTarget = 0, people = [], arrows = [], inside = null;
+
+  function inPoly(pt, ring) {
+    let c = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const [xi, yi] = ring[i], [xj, yj] = ring[j];
+      if ((yi > pt[1]) !== (yj > pt[1]) && pt[0] < (xj - xi) * (pt[1] - yi) / (yj - yi) + xi) c = !c;
+    }
+    return c;
+  }
+  function co2Color(v) {
+    if (v == null) return "#d3d9e0";
+    return v > 1000 ? "#e57373" : v > 800 ? "#f2c94c" : "#7fc794";
+  }
+  function draw(ctx) {
+    el("rect", {x: 0, y: 0, width: 1000, height: 640, fill: "#eef1ec"});
+    el("rect", {x: BOX.x, y: BOX.y, width: BOX.w, height: BOX.h, rx: 10, fill: "#dfe5dc", stroke: "#c9d1c5"});
+    txt("Songdo Convensia site", {x: BOX.x + 14, y: BOX.y + 24, "font-size": 13, "font-weight": 700, fill: "#2b3a4a"});
+    const feats = ((ctx.buildings && ctx.buildings.features) || []).filter(f => f.geometry && f.geometry.type === "Polygon");
+    const node = [ctx.node.lon, ctx.node.lat];
+    M.blds = [];
+    if (feats.length) {
+      const all = feats.flatMap(f => f.geometry.coordinates[0]).concat([node]);
+      const lat0 = all.reduce((a, p) => a + p[1], 0) / all.length;
+      const kx = Math.cos(lat0 * Math.PI / 180) * 111320, ky = 110540;
+      const xs = all.map(p => p[0] * kx), ys = all.map(p => p[1] * ky);
+      const minx = Math.min(...xs), maxx = Math.max(...xs), miny = Math.min(...ys), maxy = Math.max(...ys);
+      const k = Math.min((BOX.w - 140) / (maxx - minx), (BOX.h - 220) / (maxy - miny));
+      const ox = BOX.x + (BOX.w - (maxx - minx) * k) / 2, oy = BOX.y + 110;
+      const P = p => [ox + (p[0] * kx - minx) * k, oy + (maxy - p[1] * ky) * k];
+      // roads around the block (schematic)
+      const [x0, y0] = P([Math.min(...all.map(p => p[0])), Math.max(...all.map(p => p[1]))]);
+      const [x1, y1] = P([Math.max(...all.map(p => p[0])), Math.min(...all.map(p => p[1]))]);
+      el("rect", {x: BOX.x + 10, y: y1 + 34, width: BOX.w - 20, height: 26, fill: "#a7adb4"});
+      el("rect", {x: x0 - 52, y: BOX.y + 50, width: 22, height: BOX.h - 60, fill: "#a7adb4"});
+      txt("road (schematic)", {x: BOX.x + 20, y: y1 + 51, "font-size": 9.5, fill: "#f4f6f8"});
+      feats.forEach(f => {
+        const ring = f.geometry.coordinates[0];
+        const has = inPoly(node, ring);
+        if (has) inside = f;
+        const sp = ring.map(P);
+        const poly = el("polygon", {points: sp.map(p => p.map(v => v.toFixed(1)).join(",")).join(" "),
+                                    fill: has ? co2Color(null) : "#cfd5dc", stroke: has ? "#2b3a4a" : "#aab3bd", "stroke-width": has ? 2 : 1});
+        // labels at the top and bottom edge: the sensor marker usually sits in the middle
+        const cx = sp.reduce((a, p) => a + p[0], 0) / sp.length;
+        const top = Math.min(...sp.map(p => p[1])), bot = Math.max(...sp.map(p => p[1]));
+        const nm = ((f.properties && f.properties.name) || "").replace(/\s*\(SAMPLE footprint\)/, "");
+        txt(nm, {x: cx, y: top + 20, "font-size": 11.5, "font-weight": 700, fill: "#1d232b", "text-anchor": "middle"});
+        txt(`${(f.properties && f.properties.building_id) || ""} · ${has ? "this node" : "no sensor on this node"}`,
+            {x: cx, y: top + 35, "font-size": 9.5, fill: "#4a5059", "text-anchor": "middle"});
+        if (has) M.bldTxt = txt("", {x: cx, y: bot - 14, "font-size": 12, "font-weight": 800, fill: "#1d232b", "text-anchor": "middle"});
+        M.blds.push({poly, has});
+      });
+      const [nx, ny] = P(node);
+      el("circle", {cx: nx, cy: ny, r: 5, fill: "#14202e", stroke: "#fff", "stroke-width": 1.5});
+      txt("sensor + node", {x: nx + 8, y: ny + 4, "font-size": 9.5, fill: "#14202e"});
+      txt("Footprints: SAMPLE GeoJSON (not real VWorld data)", {x: BOX.x + 14, y: BOX.y + BOX.h - 14, "font-size": 9.5, fill: "#66707c"});
+    } else txt("No building GeoJSON configured (paths.buildings_geojson)", {x: BOX.x + BOX.w / 2, y: 320, "text-anchor": "middle"});
+
+    // room view
+    txt("Hall · room view (schematic)", {x: ROOM.x, y: ROOM.y - 40, "font-size": 12.5, "font-weight": 700, fill: "#1d232b"});
+    M.room = el("rect", {x: ROOM.x, y: ROOM.y, width: ROOM.w, height: ROOM.h, rx: 4, fill: "#f4f7f2", stroke: "#2b3a4a", "stroke-width": 3});
+    el("rect", {x: ROOM.x + 20, y: ROOM.y + ROOM.h - 3, width: 50, height: 6, fill: "#f4f7f2"});   // door
+    // damper in the ceiling duct
+    const DX = ROOM.x + ROOM.w - 110, DY = ROOM.y - 30;
+    el("rect", {x: DX, y: DY, width: 80, height: 32, rx: 3, fill: "#c4ccd4", stroke: "#7d8792"});
+    M.blades = [0, 1, 2, 3].map(i => el("line", {x1: DX + 12 + i * 19, y1: DY + 4, x2: DX + 12 + i * 19, y2: DY + 28, stroke: "#2b3a4a", "stroke-width": 3, "stroke-linecap": "round"}));
+    txt("HVAC damper", {x: DX + 40, y: DY - 6, "font-size": 10, fill: "#4a5059", "text-anchor": "middle"});
+    M.dmpTxt = txt("", {x: DX - 10, y: DY + 21, "font-size": 13, "font-weight": 800, fill: "#1d232b", "text-anchor": "end"});
+    M.air = el("g", {});
+    for (let i = 0; i < 4; i++) arrows.push({g: el("path", {d: "M0 0 l0 26 m-5 -6 l5 6 l5 -6", stroke: "#2f80ed", "stroke-width": 2, fill: "none", opacity: 0}, M.air), x: DX + 12 + i * 19, t: i * .25});
+    M.people = el("g", {});
+    M.roomTxt = txt("", {x: ROOM.x + 14, y: ROOM.y + 24, "font-size": 12, "font-weight": 700, fill: "#1d232b"});
+    // CO2 gauge 400..1600 ppm
+    const GX = ROOM.x, GY = ROOM.y + ROOM.h + 40, GW = ROOM.w;
+    M.gx = v => GX + Math.max(0, Math.min(1, (v - 400) / 1200)) * GW;
+    [[400, 800, "#7fc794"], [800, 1000, "#f2c94c"], [1000, 1600, "#e57373"]].forEach(([a, b, c]) =>
+      el("rect", {x: M.gx(a), y: GY, width: M.gx(b) - M.gx(a), height: 12, fill: c}));
+    const thr = (ruleFor(DAMPER) || {}).threshold ?? 1000;
+    el("line", {x1: M.gx(thr), y1: GY - 6, x2: M.gx(thr), y2: GY + 18, stroke: "#c62828", "stroke-width": 2});
+    txt(`rule > ${thr} ppm`, {x: M.gx(thr), y: GY + 30, "font-size": 9.5, fill: "#c62828", "text-anchor": "middle"});
+    [400, 800, 1200, 1600].forEach(v => txt(`${v}`, {x: M.gx(v), y: GY - 6, "font-size": 9, fill: "#66707c", "text-anchor": "middle"}));
+    M.needle = el("path", {d: "", fill: "#1d232b"});
+    txt("CO₂ ppm", {x: GX - 6, y: GY + 10, "font-size": 9.5, fill: "#4a5059", "text-anchor": "end"});
+    nodeBox(ROOM.x + 60, GY + 52, "OS1 · local rules");
+    schematicNote("Site plan from GeoJSON · room view schematic");
+  }
+  function render(live) {
+    co2 = last(live.readings.INDOOR_CO2_PPM);
+    const o = last(live.readings.OCCUPANCY_PIR);
+    occ = o == null ? 0 : Math.max(0, Math.min(40, Math.round(o)));
+    const d = actuator(live, DAMPER);
+    damperTarget = d.value == null ? 0 : d.value;
+    M.blds.forEach(b => { if (b.has) b.poly.setAttribute("fill", co2Color(co2)); });
+    if (M.bldTxt) M.bldTxt.textContent = co2 == null ? "" : `CO₂ ${Math.round(co2)} ppm`;
+    M.room.setAttribute("fill", co2 > 1000 ? "#fbe3e1" : co2 > 800 ? "#fdf3dc" : "#f4f7f2");
+    M.roomTxt.textContent = `${occ} people · CO₂ ${co2 == null ? "-" : Math.round(co2)} ppm${d.active ? " · ventilation rule active" : ""}`;
+    M.roomTxt.setAttribute("fill", co2 > 1000 ? "#b3261e" : "#1d232b");
+    if (co2 != null) { const x = M.gx(co2), y = ROOM.y + ROOM.h + 40; M.needle.setAttribute("d", `M${x} ${y + 13} l-6 10 l12 0 Z`); }
+  }
+  function frame(dt, now) {
+    damper += (damperTarget - damper) * Math.min(1, dt * 2.5);
+    const ang = 80 * (damper / 100);             // 0 % = blades vertical (closed), 100 % = open
+    M.blades.forEach((b, i) => {
+      const cx = +b.getAttribute("x1"), cy = ROOM.y - 14;
+      b.setAttribute("transform", `rotate(${ang.toFixed(1)} ${cx} ${cy})`);
+    });
+    M.dmpTxt.textContent = `${Math.round(damper)} %`;
+    arrows.forEach(a => {
+      a.t = (a.t + dt * (.3 + damper / 100)) % 1;
+      a.g.setAttribute("transform", `translate(${a.x} ${(ROOM.y + 4 + a.t * 70).toFixed(1)})`);
+      a.g.setAttribute("opacity", damper > 5 ? ((1 - a.t) * Math.min(1, damper / 60)).toFixed(2) : 0);
+    });
+    while (people.length < occ) {
+      const p = {x: ROOM.x + 30 + Math.random() * (ROOM.w - 60), y: ROOM.y + 50 + Math.random() * (ROOM.h - 80), vx: 0, vy: 0};
+      p.c = el("circle", {cx: p.x, cy: p.y, r: 5, fill: "#7b4fbf", stroke: "#4a2c7a"}, M.people);
+      people.push(p);
+    }
+    while (people.length > occ) people.pop().c.remove();
+    for (const p of people) {
+      p.vx += (Math.random() - .5) * 40 * dt; p.vy += (Math.random() - .5) * 40 * dt;
+      p.vx *= .96; p.vy *= .96;
+      p.x = Math.max(ROOM.x + 12, Math.min(ROOM.x + ROOM.w - 12, p.x + p.vx * dt * 6));
+      p.y = Math.max(ROOM.y + 36, Math.min(ROOM.y + ROOM.h - 12, p.y + p.vy * dt * 6));
+      p.c.setAttribute("cx", p.x.toFixed(1)); p.c.setAttribute("cy", p.y.toFixed(1));
+    }
+  }
+  function extra(ctx) {
+    const b = ctx.buildings;
+    if (!b) return null;
+    return {title: "Buildings (OS1-1 cached inventory)",
+      html: `<div class="small mute">${esc(b.note || b.name || "")}</div>` + b.features.map(f => {
+        const p = f.properties || {};
+        const here = inside === f;
+        return `<div class="stop"><b>${esc(p.building_id || "?")}</b> ${esc(p.name || "")}
+          <div class="small ${here ? "" : "mute"}">${here ? "contains this node's sensor (point-in-polygon)" : "no sensor on this node"}</div></div>`;
+      }).join("")};
+  }
+  return {
+    title: "OS1-5 · Songdo Convensia", draw, frame, render, extra,
+    offlineText: "the building's ventilation runs on the edge node",
+    act: {name: DAMPER, title: "HVAC damper", unit: "%", fmt: v => v == null ? "-" : Math.round(v),
+          activeBadge: "command active", idleBadge: "baseline"},
+    decimals: {INDOOR_CO2_PPM: 0, OCCUPANCY_PIR: 0},
+    legend: `<span><i style="background:#7fc794"></i>CO₂ ≤ 800</span><span><i style="background:#f2c94c"></i>800–1000</span>
+      <span><i style="background:#e57373"></i>&gt; 1000 ppm (rule fires)</span>
+      <span><i style="background:#7b4fbf;border-radius:50%"></i>people (count = latest PIR reading)</span>`,
+    foot: "Live data from this node: indoor CO₂ and PIR occupancy, the damper state and its TTL, decisions, outbox and receiver counts. "
+      + "Drawn by the page: people moving in the room and the airflow. The footprints are the repo's SAMPLE GeoJSON (not real VWorld data); "
+      + "the node's building is the footprint that contains its configured position.",
+  };
+})();
+
+// ===================================================================== common panel
+function spark(series, guide, guideLabel) {
+  const w = 320, h = 46, p = 3;
+  if (!series.length) return '<div class="small mute">no readings yet</div>';
+  const vals = series.map(r => r.v);
+  let lo = Math.min(...vals, guide ?? Infinity), hi = Math.max(...vals, guide ?? -Infinity);
+  if (hi - lo < 1e-6) { hi += .5; lo -= .5; }
+  const X = i => p + (i * (w - 2 * p)) / Math.max(1, series.length - 1);
+  const Y = v => h - p - ((v - lo) * (h - 2 * p)) / (hi - lo);
+  const pts = series.map((r, i) => `${X(i).toFixed(1)},${Y(r.v).toFixed(1)}`).join(" ");
+  let g = "";
+  if (guide != null) g = `<line x1="0" x2="${w}" y1="${Y(guide)}" y2="${Y(guide)}" stroke="#c62828" stroke-dasharray="4 3" stroke-width="1"/>`
+    + `<text x="${w - 2}" y="${Y(guide) - 3}" font-size="9" fill="#c62828" text-anchor="end">${esc(guideLabel)}</text>`;
+  return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" preserveAspectRatio="none">${g}`
+    + `<polyline points="${pts}" fill="none" stroke="#1d5fb4" stroke-width="1.6"/></svg>`;
+}
+// Dashed line on a sparkline: the scene's own (undefined = none given), else the threshold of a rule on that sensor.
+function guideFor(name) {
+  const g = SC.guide ? SC.guide(name) : undefined;
+  if (g !== undefined) return g;
+  const r = S.ctx.rules.find(x => x.sensor === name);
+  return r ? [r.threshold, `rule ${r.op} ${r.threshold}`] : null;
+}
+function render(live) {
+  const ctx = S.ctx;
+  $("wan").className = "badge " + (live.wan_online ? "on" : "off");
+  $("wan").textContent = live.wan_online ? "WAN online" : "WAN cut";
+  $("recv").className = "badge " + (live.receiver_reachable ? "on" : "off");
+  $("recv").textContent = live.receiver_reachable ? "receiver reachable" : "receiver unreachable";
+  if (L.nodeLed) { L.nodeLed.setAttribute("fill", "#2ecc71"); L.wanLed.setAttribute("fill", live.wan_online ? "#2ecc71" : "#e74c3c"); }
+  if (!live.wan_online) {
+    L.banner.setAttribute("opacity", 1); L.bannerRect.setAttribute("fill", "#b3261e");
+    L.bannerTxt.textContent = `WAN CUT: ${SC.offlineText} · ${live.outbox_pending} events waiting in the outbox`;
+  } else if (live.outbox_pending > 20) {
+    L.banner.setAttribute("opacity", 1); L.bannerRect.setAttribute("fill", "#1d5fb4");
+    L.bannerTxt.textContent = `WAN back: draining the outbox · ${live.outbox_pending} events left`;
+  } else L.banner.setAttribute("opacity", 0);
+
+  // actuator card
+  const rule = ruleFor(SC.act.name);
+  const a = actuator(live, SC.act.name);
+  $("actVal").textContent = SC.act.fmt(a.value);
+  $("actBadge").className = "badge " + (a.active ? "warnb" : "on");
+  $("actBadge").textContent = a.active ? SC.act.activeBadge : SC.act.idleBadge;
+  const ttl = a.ttl_s || (rule && rule.ttl_s) || 1;
+  $("ttlBar").style.width = a.active ? Math.max(0, Math.min(100, 100 * (a.remaining_s || 0) / ttl)) + "%" : "0";
+  const dflt = ctx.defaults[SC.act.name];
+  const unit = SC.act.unit ? " " + SC.act.unit : "";
+  $("actTxt").innerHTML = a.active
+    ? `Set by rule <span class="mono">${esc(a.rule)}</span> on the node: ${(a.remaining_s || 0).toFixed(ttl < 5 ? 1 : 0)} s of ${ttl} s TTL left (monotonic clock). Returns to ${esc(SC.act.fmt(dflt))}${esc(unit)} when it expires.`
+    : `No command inside its TTL, so the default (${esc(SC.act.fmt(dflt))}${esc(unit)}) is shown. Rule: <span class="mono">${esc(rule ? rule.sensor : "?")} ${esc(rule ? rule.op + " " + rule.threshold : "")}</span> sets ${esc(rule ? SC.act.fmt(rule.command) : "?")}${esc(unit)} for ${esc(rule ? rule.ttl_s : "?")} s.`;
+
+  // sensors
+  $("sensors").innerHTML = ctx.streams.map(s => {
+    const ser = live.readings[s.name] || [], v = last(ser);
+    const dec = (SC.decimals && SC.decimals[s.name]) ?? 2;
+    const g = guideFor(s.name);
+    return `<div style="margin-bottom:.45rem"><div class="row"><span class="mono">${esc(s.name)}</span><span style="flex:1"></span>
+      <b>${v == null ? "-" : v.toFixed(dec)}</b><span class="mute small">${esc(s.unit || "")}</span></div>${spark(ser, g ? g[0] : null, g ? g[1] : "")}</div>`;
+  }).join("");
+
+  // store and forward
+  $("evN").textContent = live.events ?? "-";
+  $("dlN").textContent = live.delivered ?? "-";
+  $("obN").textContent = live.outbox_pending;
+  $("linkTxt").innerHTML = live.wan_online ? '<span style="color:var(--ok)">→ WAN up →</span>' : '<span style="color:var(--bad)">✕ WAN cut ✕</span>';
+  const cons = live.delivered != null && live.delivered <= live.events && live.events - live.outbox_pending <= live.delivered;
+  $("consBadge").className = "badge " + (live.delivered == null ? "none" : cons ? "on" : "off");
+  $("consBadge").textContent = live.delivered == null ? "receiver ?" : cons ? "conserved" : "check";
+
+  // decisions
+  const dc = live.decision_counts || {};
+  $("decCounts").textContent = Object.keys(dc).length ? Object.entries(dc).map(([k, n]) => `${k.toLowerCase()} ${n}`).join(" · ") : "";
+  $("dec").innerHTML = live.decisions.length ? live.decisions.map(d => {
+    const cls = d.status === "DISPATCHED" ? "on" : d.status === "PENDING" ? "run" : "warnb";
+    return `<tr><td class="mono">${fmtTime(d.created_at)}</td><td class="mono" title="${esc(d.rule)}">${esc(d.rule.length > 12 ? d.rule.slice(0, 11) + "…" : d.rule)}</td>
+      <td>${esc(d.command_value)}</td><td><span class="badge ${cls}" title="${esc(d.reason || "")}">${esc(d.status)}</span></td></tr>`;
+  }).join("") : '<tr><td colspan="4" class="mute">No decisions yet</td></tr>';
+
+  // processes
+  const procs = live.processes || [];
+  $("procs").innerHTML = procs.length ? procs.map(p => `<tr class="${p.restarts ? "warnrow" : ""}"><td class="mono">${esc(p.name)}</td>
+    <td class="mono">${esc(p.pid ?? "-")}</td><td>${esc(p.restarts ?? 0)}</td><td class="small">${esc(p.state ?? "-")}</td></tr>`).join("")
+    : '<tr><td colspan="4" class="mute">HealthMon has not reported yet</td></tr>';
+
+  SC.render(live);
+}
+
+function showErr(msg) { const e = $("err"); e.style.display = msg ? "flex" : "none"; e.textContent = msg || ""; }
+async function poll() {
+  try {
+    const r = await fetch("/api/map", {cache: "no-store"});
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    S.live = await r.json(); S.ok = true; showErr("");
+    render(S.live);
+  } catch (e) {
+    S.ok = false;
+    showErr("The edge node does not answer (" + e.message + "). Start it with: bash scripts/start_demo.sh " + (S.ctx ? S.ctx.node.id.replace(/^EDGE_NODE_(OS\d).*$/, "$1") : "OS3"));
+  }
+}
+async function wan(action) {
+  try { await fetch("/api/wan/" + action, {method: "POST"}); } catch (e) { /* poll shows the state */ }
+  poll();
+}
+let lastFrame = performance.now();
+function frame(now) {
+  const dt = Math.min(.1, (now - lastFrame) / 1000); lastFrame = now;
+  if (SC && S.ok) SC.frame(dt, now);
+  requestAnimationFrame(frame);
+}
+async function init() {
+  try {
+    const r = await fetch("/api/map/context", {cache: "no-store"});
+    S.ctx = await r.json();
+  } catch (e) { showErr("Cannot load the map context: " + e.message); setTimeout(init, 2000); return; }
+  $("node").textContent = S.ctx.node.id;
+  SC = SCENES[S.ctx.scene];
+  if (!SC) {
+    showErr(`No map scene for ${S.ctx.node.id}. Scenes exist for OS1, OS2, OS3 and OS5: start one with bash scripts/start_demo.sh OS3 (or OS1 / OS2 / OS5) and open /map on its port.`);
+    return;
+  }
+  $("title").textContent = "Live map · " + SC.title;
+  document.title = "Songdo Edge - " + SC.title;
+  $("actTitle").textContent = SC.act.title;
+  $("actUnit").textContent = SC.act.unit;
+  $("legend").innerHTML = SC.legend;
+  $("foot").textContent = SC.foot;
+  svg.innerHTML = "";
+  SC.draw(S.ctx);
+  drawBanner();
+  const x = SC.extra && SC.extra(S.ctx);
+  if (x) {
+    const box = $(x.top ? "extraTop" : "extra");
+    box.style.display = "block";
+    box.innerHTML = `<h2>${esc(x.title)}</h2>` + x.html;
+    if (x.init) x.init();
+  }
+  poll(); setInterval(poll, 1000);
+  requestAnimationFrame(frame);
+}
+init();
+</script>
+</body></html>

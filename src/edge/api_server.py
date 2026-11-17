@@ -2,7 +2,9 @@
 
 Node:       GET  /api/status, GET /api/reconcile, POST /api/wan/cut, POST /api/wan/restore,
             POST /api/generation/pause, POST /api/generation/resume
-Scenarios:  GET  /api/scenarios                       registry (25 official tasks + profiles)
+Map:        GET  /map (page), /api/map/context, /api/map                 live 2D map, see map_view.py
+            POST /api/fault/kill-processor   OS5-5 demo, only where config map.faults enables it
+Scenarios:  GET  /api/scenarios                      registry (25 official tasks + profiles)
             POST /api/runs        {"scenario_id", "profile"}           start one run
             POST /api/batches     {"theme" | "scenario_ids", "profile"} run several, one by one
             GET  /api/runs, /api/runs/<id>, /api/runs/<id>/log?start=N, /api/runs/<id>/evidence
@@ -21,6 +23,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
 from edge import registry as reg
+from edge.map_view import FaultError, kill_processor, map_context, map_live, map_page_path
 from edge.runner import RunManager
 
 from edge.storage import Storage
@@ -110,6 +113,13 @@ def make_handler(cfg, storage, runs=None):
             if path in ("/", "/index.html"):
                 with open(index_path, "rb") as f:
                     return self._send(200, f.read(), "text/html; charset=utf-8")
+            if path in ("/map", "/map.html"):
+                with open(map_page_path(cfg), "rb") as f:
+                    return self._send(200, f.read(), "text/html; charset=utf-8")
+            if path == "/api/map/context":
+                return self._send(200, map_context(cfg))
+            if path == "/api/map":
+                return self._send(200, map_live(cfg, storage))
             if runs is None:
                 return self._err(404, "not found")
             if path == "/api/scenarios":
@@ -160,6 +170,11 @@ def make_handler(cfg, storage, runs=None):
             if path == "/api/wan/restore":
                 storage.set_wan_online(True)
                 return self._send(200, {"wan_online": storage.wan_online()})
+            if path == "/api/fault/kill-processor":
+                try:
+                    return self._send(200, kill_processor(cfg))
+                except FaultError as e:
+                    return self._err(e.code, str(e))
             if path in ("/api/generation/pause", "/api/generation/resume"):
                 paused = path.endswith("pause")
                 storage.kv_set("generation_paused", "1" if paused else "0")

@@ -235,6 +235,27 @@ class Storage:
     def actuator_states(self):
         return self._read("SELECT * FROM actuator_state ORDER BY actuator")
 
+    # ---- live map (/api/map) ----
+    def latest_readings(self, sensor, limit=60):
+        """Newest first. Walks idx_events_observed backwards, so it stays cheap on a large table."""
+        return self._read("SELECT value, observed_at FROM sensor_events WHERE sensor=? "
+                          "ORDER BY observed_at DESC LIMIT ?", (sensor, limit))
+
+    def actuator_commands(self):
+        """Each actuator's last applied command with the TTL window of the decision behind it."""
+        return self._read("SELECT s.actuator, s.value, s.decision_id, s.boot_epoch, s.applied_at, "
+                          "d.rule, d.issued_mono, d.expires_mono FROM actuator_state s "
+                          "LEFT JOIN edge_decisions d ON d.decision_id = s.decision_id ORDER BY s.actuator")
+
+    def decision_counts(self):
+        """{status: n} over all command intents (uses idx_decisions_status)."""
+        return {r["status"]: r["n"] for r in self._read(
+            "SELECT status, COUNT(*) AS n FROM edge_decisions WHERE seq IS NOT NULL GROUP BY status")}
+
+    def recent_decisions(self, limit=8):
+        return self._read("SELECT decision_id, rule, actuator, command_value, status, reason, seq, created_at "
+                          "FROM edge_decisions WHERE seq IS NOT NULL ORDER BY rowid DESC LIMIT ?", (limit,))
+
     def recovery_report(self):
         """Exit rule of the assessment: every admitted event and every intent has exactly one
         durable disposition, and every applied command has exactly one receipt."""

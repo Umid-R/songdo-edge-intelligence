@@ -19,6 +19,7 @@ button{font:inherit;border:1px solid var(--line);background:#fff;color:var(--ink
 button:hover{border-color:#9aa5b1}button:disabled{opacity:.45;cursor:default}
 button.primary{background:var(--run);border-color:var(--run);color:#fff}
 button.danger{background:#fff;border-color:#e3b2ad;color:var(--bad)}
+header .hlink{font:inherit;text-decoration:none;background:#22334a;border:1px solid #34495f;color:#fff;padding:.32rem .75rem;border-radius:6px}
 header button{background:#22334a;border-color:#34495f;color:#fff}header button:hover{border-color:#6d8299}
 select{font:inherit;padding:.28rem .4rem;border:1px solid var(--line);border-radius:6px;background:#fff}
 nav{display:flex;gap:.2rem;padding:0 1.4rem;background:#fff;border-bottom:1px solid var(--line)}
@@ -57,6 +58,20 @@ pre.log .f{color:#ff8a80}pre.log .p{color:#8ee39b}
 .empty{color:var(--mute);padding:1.2rem 0;text-align:center}
 .bar{height:6px;background:#e8ebef;border-radius:3px;overflow:hidden;margin-top:.3rem}
 .bar i{display:block;height:100%;background:var(--run)}
+header button.os6{background:#1f7a3a;border-color:#2c9a4c}header button.os6:hover{border-color:#8ee39b}
+.os6top{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:1rem;align-items:start}
+@media(max-width:1100px){.os6top{grid-template-columns:1fr}}
+#lot{width:100%;height:auto;display:block;background:#2b323b;border-radius:8px}
+#lot text{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.legend{display:flex;flex-wrap:wrap;gap:.4rem 1rem;font-size:.8rem;color:var(--mute);margin-top:.5rem}
+.legend i{display:inline-block;width:.85rem;height:.85rem;border-radius:3px;vertical-align:-2px;margin-right:.3rem;border:1px solid #0002}
+.os6msg{min-height:2.6rem;margin:.6rem 0 .2rem;padding:.45rem .7rem;border-radius:6px;background:#eef2f7;font-weight:600}
+.os6msg.alert{background:var(--badbg);color:var(--bad)}
+.os6log{height:220px;overflow:auto;font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:#f6f7f9;border:1px solid var(--line);border-radius:6px;padding:.4rem .6rem}
+.os6log div.cur{background:#e6effb}
+.os6run{border:1px solid var(--line);border-radius:6px;padding:.5rem .6rem;margin-bottom:.6rem;cursor:pointer}
+.os6run.view{border-color:var(--run);box-shadow:0 0 0 1px var(--run) inset}
+.os6run .sum{font-size:.78rem;color:var(--mute);margin-top:.25rem}
 </style></head><body>
 <header>
  <h1>Songdo Edge Console</h1><span class="node" id="node">-</span>
@@ -64,11 +79,14 @@ pre.log .f{color:#ff8a80}pre.log .p{color:#8ee39b}
  <span class="sp"></span>
  <button onclick="wan('cut')">Simulate WAN Internet Cut</button>
  <button onclick="wan('restore')">Restore WAN Connection</button>
+ <a class="hlink" href="/map">Live map</a>
+ <button class="os6" onclick="testOS6()" title="Run OS6-1 (availability) and OS6-2 (booking) and show them on the 2D parking lot">Test OS6</button>
 </header>
 <nav>
  <button class="active" data-tab="scen">Scenarios (25 tasks)</button>
  <button data-tab="node">Live node</button>
  <button data-tab="runs">Run history</button>
+ <button data-tab="os6">OS6 Parking</button>
 </nav>
 <main>
 <!-- ================= Scenarios ================= -->
@@ -126,6 +144,36 @@ pre.log .f{color:#ff8a80}pre.log .p{color:#8ee39b}
   <table><thead><tr><th>Run ID</th><th>Scenario</th><th>Profile</th><th>State</th><th class="num">Elapsed</th><th>Started</th><th></th></tr></thead>
    <tbody id="runRows"><tr><td colspan="7" class="empty">no runs yet</td></tr></tbody></table></div>
  <div class="card"><h2>Batches</h2><div id="batches" class="mute">none</div></div>
+</section>
+<!-- ================= OS6 parking (extra theme) ================= -->
+<section class="tab" id="tab-os6">
+ <div class="os6top">
+  <div class="card">
+   <h2><span id="o6Title">OS6 Smart Parking · 2D lot</span><span class="sp"></span>
+    <span id="o6Phase" class="badge none">idle</span></h2>
+   <svg id="lot" viewBox="0 0 800 420" role="img" aria-label="Parking lot, 24 bays in zones A, B and C"></svg>
+   <div class="legend">
+    <span><i style="background:#3f9a5a"></i>free</span><span><i style="background:#6b7480"></i>occupied</span>
+    <span><i style="background:#2f6fc4"></i>booked (hold, bar = time left)</span><span><i style="background:#c0392b"></i>double-booked</span>
+    <span><i style="background:transparent;border:2px dashed #f0a020"></i>zone half-updated (torn read)</span>
+    <span><i style="background:transparent;border:2px solid #ffd54a"></i>bay in focus</span>
+   </div>
+   <div class="os6msg" id="o6Msg">Press <b>Test OS6</b> to run both parking scenarios.</div>
+   <div class="toolbar" style="margin:.5rem 0 0">
+    <button id="o6Play" onclick="o6TogglePlay()">Pause</button>
+    <button onclick="o6Replay()">Replay</button>
+    <input type="range" id="o6Slider" min="0" max="0" value="0" style="flex:1;min-width:160px" oninput="o6Seek(+this.value)">
+    <span class="mono mute" id="o6Pos">0 / 0</span>
+    <select id="o6Speed" title="playback speed"><option value="4">4 fps</option><option value="8" selected>8 fps</option><option value="16">16 fps</option></select>
+   </div>
+  </div>
+  <div>
+   <div class="card"><h2>Counts (this frame)</h2><div class="kv" id="o6Kv"></div></div>
+   <div class="card"><h2>Runs<span class="sp"></span><button class="primary" onclick="testOS6()">Test OS6</button></h2>
+    <div id="o6Runs"></div><div class="msg" id="o6Err" style="margin:0;color:var(--bad)"></div></div>
+  </div>
+ </div>
+ <div class="card"><h2>Timeline (one line per frame; click to jump)</h2><div class="os6log" id="o6Log"></div></div>
 </section>
 </main>
 <script>
@@ -250,8 +298,9 @@ async function refreshDetail(force){
 async function pullLog(){
  if(LOGRUN!==SEL)return;
  const l=await api(`/api/runs/${SEL}/log?start=${LOGNEXT}&limit=1000`);
- if(l.lines.length){const pre=$('dLog');
-  pre.insertAdjacentHTML('beforeend',l.lines.map(x=>{const e=esc(x);return /FAILED|\[FAIL\]|Traceback/.test(x)?`<span class="f">${e}</span>`:/\[PASS\]/.test(x)?`<span class="p">${e}</span>`:e}).join('\n')+'\n');
+ const lines=l.lines.filter(x=>!x.startsWith('@VIZ '));     // OS6 2D frames: drawn in the OS6 tab
+ if(lines.length){const pre=$('dLog');
+  pre.insertAdjacentHTML('beforeend',lines.map(x=>{const e=esc(x);return /FAILED|\[FAIL\]|Traceback/.test(x)?`<span class="f">${e}</span>`:/\[PASS\]/.test(x)?`<span class="p">${e}</span>`:e}).join('\n')+'\n');
   if(pre.childNodes.length>6000)pre.textContent=pre.textContent.slice(-200000);
   if($('dFollow').checked)pre.scrollTop=pre.scrollHeight;}
  LOGNEXT=l.next;
@@ -270,6 +319,155 @@ async function refreshRuns(){
   <td class="mono mute">${esc(b.manifest||'')}</td><td>${b.state==='running'?`<button class="danger" onclick="post('/api/batches/${b.batch_id}/cancel').then(refreshRuns)">Cancel batch</button>`:''}</td></tr>`}).join('')}</tbody></table>`:'none';
  renderScen();
 }
+// ---------- OS6 parking (extra theme): 2D lot drawn from the scenario's "@VIZ {json}" frames ----------
+const O6IDS=['OS6-1','OS6-2'],O6END=['passed','failed','timeout','cancelled','error','skipped'];
+const O6={view:'OS6-1',idx:0,playing:true,auto:false,batch:null,data:{},logN:-1};
+const ZN=['A','B','C'],NC=8,BW=82,BH=78,X0=104;
+const ROWY={A:22,B:176,C:258};                       // A faces lane 1; B and C are back to back
+const SLOTS=ZN.flatMap(z=>Array.from({length:NC},(_,i)=>z+String(i+1).padStart(2,'0')));
+const bayXY=s=>[X0+(+s.slice(1)-1)*(BW+4),ROWY[s[0]]];
+function o6Frames(){return(O6.data[O6.view]||{}).frames||[]}
+function o6Show(tab){document.querySelector(`nav button[data-tab="${tab}"]`).click();}
+async function testOS6(){
+ o6Show('os6');$('o6Err').textContent='';
+ try{const b=await post('/api/batches',{scenario_ids:O6IDS,profile:'standard'});
+  Object.assign(O6,{view:'OS6-1',idx:0,playing:true,auto:true,batch:b.batch_id,data:{},logN:-1});await refreshRuns();o6Poll();}
+ catch(e){$('o6Err').textContent=e.message;}
+}
+async function o6RunOne(sid,ev){
+ ev.stopPropagation();$('o6Err').textContent='';
+ try{await post('/api/runs',{scenario_id:sid,profile:'standard'});Object.assign(O6,{view:sid,idx:0,playing:true,auto:false,logN:-1});
+  delete O6.data[sid];await refreshRuns();o6Poll();}
+ catch(e){$('o6Err').textContent=e.message;}
+}
+function o6SetView(sid){if(O6.view!==sid){O6.view=sid;O6.idx=0;O6.playing=true;O6.auto=false;O6.logN=-1;o6Draw();o6RenderRuns();}}
+function o6TogglePlay(){O6.playing=!O6.playing;if(O6.playing&&O6.idx>=o6Frames().length-1)O6.idx=0;o6Draw();}
+function o6Replay(){O6.idx=0;O6.playing=true;o6Draw();}
+function o6Seek(i){O6.idx=i;O6.playing=false;o6Draw();}
+let o6Busy=false;
+async function o6Poll(){
+ if(o6Busy)return;o6Busy=true;
+ try{for(const sid of O6IDS){
+   const lr=lastRun(sid);if(!lr)continue;
+   let d=O6.data[sid];
+   if(!d||d.run!==lr.run_id){d=O6.data[sid]={run:lr.run_id,frames:[],next:0,done:false,detail:null};if(O6.view===sid){O6.idx=0;O6.logN=-1;}}
+   if(d.done)continue;
+   const l=await api(`/api/runs/${d.run}/log?start=${d.next}&limit=2000`);
+   for(const x of l.lines)if(x.startsWith('@VIZ ')){try{d.frames.push(JSON.parse(x.slice(5)))}catch(e){}}
+   d.next=l.next;
+   if(O6END.includes(l.state)&&l.next>=l.total){d.done=true;d.detail=await api('/api/runs/'+d.run);}
+  }}catch(e){}finally{o6Busy=false;}
+ o6RenderRuns();o6Draw();
+}
+function o6RenderRuns(){
+ $('o6Runs').innerHTML=O6IDS.map(sid=>{
+  const s=REG.find(x=>x.id===sid)||{title:sid,concept:''},lr=lastRun(sid),d=O6.data[sid],st=lr?lr.state:'none';
+  const c=d&&d.detail&&d.detail.checks;
+  return `<div class="os6run ${O6.view===sid?'view':''}" onclick="o6SetView('${sid}')">
+   <div style="display:flex;gap:.5rem;align-items:center"><b class="mono">${sid}</b><span class="badge ${st}">${lr?st:'never run'}</span>
+    <span class="mute" style="font-size:.78rem">${lr?secs(lr.elapsed_s):''}${d?' · '+d.frames.length+' frames':''}</span><span style="flex:1"></span>
+    <button onclick="o6RunOne('${sid}',event)" ${lr&&(st==='running'||st==='queued')?'disabled':''}>Run</button></div>
+   <div style="margin-top:.2rem">${esc(s.title)}</div><div class="sum">${esc(s.concept)}</div>
+   ${c?`<div class="sum" style="color:${st==='passed'?'var(--ok)':'var(--bad)'}">${esc(c.verdict_line||'')}</div>
+    <div class="sum">${c.summary.slice(0,6).map(esc).join('<br>')}</div>
+    ${c.failed_checks.length?`<div class="sum" style="color:var(--bad)">${c.failed_checks.map(esc).join('<br>')}</div>`:''}`:''}
+   ${lr?`<div class="sum"><a href="#" onclick="event.stopPropagation();openRun('${lr.run_id}');return false">full log</a> · <a href="/api/runs/${lr.run_id}/evidence" onclick="event.stopPropagation()">evidence</a></div>`:''}
+  </div>`}).join('');
+}
+function o6Bay(s,code,f){
+ const [x,y]=bayXY(s),own=(f.owners||{})[s]||[],dup=own.length>1,focus=(f.focus||[]).includes(s)||f.nearest===s;
+ const hold=(f.holds||{})[s];
+ const fill=dup?'#c0392b':code==='F'?'#3f9a5a':code==='B'?'#2f6fc4':'#6b7480';
+ let g=`<rect x="${x}" y="${y}" width="${BW}" height="${BH}" rx="4" fill="${fill}" stroke="${focus?'#ffd54a':'#ffffff55'}" stroke-width="${focus?4:1.5}"/>
+  <text x="${x+5}" y="${y+14}" font-size="11" fill="#fff" opacity=".9">${s}</text>`;
+ const cx=x+BW/2,cy=y+BH/2+5;
+ if(code==='O'){                                     // a car seen from above
+  g+=`<rect x="${cx-15}" y="${cy-25}" width="30" height="50" rx="8" fill="${own.length?'#9cc3f5':'#d8dee6'}" stroke="#0005"/>
+   <rect x="${cx-11}" y="${cy-15}" width="22" height="11" rx="3" fill="#33404d"/><rect x="${cx-11}" y="${cy+9}" width="22" height="8" rx="3" fill="#33404d"/>`;
+  if(own.length)g+=`<text x="${x+BW-5}" y="${y+14}" font-size="11" fill="#fff" text-anchor="end">${esc(own[0])}</text>`;
+ }else if(dup){
+  g+=`<text x="${cx}" y="${cy-4}" font-size="20" font-weight="700" fill="#fff" text-anchor="middle">×${own.length}</text>`;
+  const names=own.length>3?own.slice(0,2).join(' ')+' +'+(own.length-2):own.join(' ');
+  g+=`<text x="${cx}" y="${cy+14}" font-size="10" fill="#fff" text-anchor="middle">${esc(names)}</text>`;
+ }else if(code==='B'){
+  g+=`<text x="${cx}" y="${cy+2}" font-size="15" font-weight="700" fill="#fff" text-anchor="middle">${esc(own[0]||'held')}</text>`;
+  if(hold!=null){const w=(BW-12)*Math.max(0,Math.min(1,hold/(f.hold_s||2.5)));
+   g+=`<rect x="${x+6}" y="${y+BH-12}" width="${BW-12}" height="6" rx="3" fill="#ffffff40"/><rect x="${x+6}" y="${y+BH-12}" width="${w}" height="6" rx="3" fill="#fff"/>
+    <text x="${cx}" y="${y+BH-16}" font-size="9" fill="#fff" text-anchor="middle">${hold.toFixed(1)} s</text>`;}
+ }else{
+  g+=`<text x="${cx}" y="${cy+8}" font-size="26" font-weight="700" fill="#ffffff55" text-anchor="middle">P</text>`;
+ }
+ if(f.queries&&s in f.queries)g+=`<text x="${x+BW-5}" y="${y+14}" font-size="11" fill="#fff" text-anchor="end">${f.queries[s]?'✓':'✗'}</text>`;
+ if(f.nearest===s)g+=`<text x="${cx}" y="${y+BH-6}" font-size="10" fill="#ffd54a" text-anchor="middle" font-weight="700">★ nearest</text>`;
+ return g;
+}
+function o6Draw(){
+ const fr=o6Frames(),n=fr.length;
+ if(O6.idx>n-1)O6.idx=Math.max(0,n-1);
+ const f=fr[O6.idx];
+ $('o6Slider').max=Math.max(0,n-1);$('o6Slider').value=O6.idx;$('o6Pos').textContent=n?`${O6.idx+1} / ${n}`:'0 / 0';
+ $('o6Play').textContent=O6.playing?'Pause':'Play';
+ const s=REG.find(x=>x.id===O6.view);$('o6Title').textContent=O6.view+' · '+(s?s.title:'parking');
+ let svg=`<rect x="0" y="0" width="800" height="420" fill="#2b323b"/>
+  <rect x="${X0-8}" y="100" width="${800-X0+8}" height="76" fill="#3a424c"/><rect x="${X0-8}" y="336" width="${800-X0+8}" height="70" fill="#3a424c"/>
+  <line x1="${X0}" y1="138" x2="796" y2="138" stroke="#e8c547" stroke-width="2" stroke-dasharray="14 10"/>
+  <line x1="${X0}" y1="371" x2="796" y2="371" stroke="#e8c547" stroke-width="2" stroke-dasharray="14 10"/>
+  <rect x="0" y="100" width="${X0-8}" height="306" fill="#3a424c"/>
+  <text x="10" y="128" font-size="13" font-weight="700" fill="#8ee39b">ENTRANCE</text>
+  <path d="M10 146 h58 m-10 -8 l10 8 l-10 8" stroke="#8ee39b" stroke-width="3" fill="none"/>
+  <text x="10" y="392" font-size="13" font-weight="700" fill="#ff8a80">EXIT</text>
+  <path d="M68 372 h-58 m10 -8 l-10 8 l10 8" stroke="#ff8a80" stroke-width="3" fill="none"/>`;
+ for(const z of ZN)svg+=`<text x="${X0-30}" y="${ROWY[z]+BH/2+8}" font-size="22" font-weight="700" fill="#9aa5b1">${z}</text>`;
+ if(!f){
+  svg+=SLOTS.map(b=>o6Bay(b,'F',{})).join('')+`<rect x="${X0-4}" y="22" width="690" height="314" fill="#2b323bcc"/>
+   <text x="450" y="190" font-size="18" fill="#d6dde6" text-anchor="middle">${O6.data[O6.view]?'waiting for frames…':'press Test OS6'}</text>`;
+  $('lot').innerHTML=svg;$('o6Msg').textContent=O6.data[O6.view]?'Run starting…':'Press Test OS6 to run both parking scenarios.';
+  $('o6Msg').className='os6msg';$('o6Phase').textContent='idle';$('o6Phase').className='badge none';$('o6Kv').innerHTML='';o6Timeline(fr);return;
+ }
+ SLOTS.forEach((b,i)=>svg+=o6Bay(b,f.slots[i],f));
+ for(const z of f.torn||[])svg+=`<rect x="${X0-4}" y="${ROWY[z]-4}" width="${8*(BW+4)+4}" height="${BH+8}" rx="6" fill="none" stroke="#f0a020" stroke-width="3" stroke-dasharray="8 5"/>
+  <text x="${X0-38}" y="${ROWY[z]+BH/2+26}" font-size="11" font-weight="700" fill="#f0a020">torn</text>`;
+ if(f.nearest){const [x,y]=bayXY(f.nearest),cx=x+BW/2,z=f.nearest[0];   // route from the entrance
+  const d=z==='A'?`M70 146 H${cx} V${y+BH}`:z==='B'?`M70 146 H${cx} V${y}`:`M70 146 H84 V371 H${cx} V${y+BH}`;
+  svg+=`<path d="${d}" stroke="#ffd54a" stroke-width="3" fill="none" stroke-dasharray="6 5"/>`;}
+ $('lot').innerHTML=svg;
+ const alert=(f.torn&&f.torn.length)||(f.dup&&f.dup.length);
+ $('o6Msg').textContent=f.msg||(f.phase==='naive'?'sensors writing bay by bay…':f.phase==='atomic'?'sensors writing zone by zone (one transaction)…':'…');
+ $('o6Msg').className='os6msg'+(alert?' alert':'');
+ $('o6Phase').textContent=f.phase;$('o6Phase').className='badge '+(alert?'failed':f.phase==='final'||f.phase==='query'?'passed':'running');
+ const cnt=k=>[...f.slots].filter(c=>c===k).length;
+ const rows=[['Time in run',f.t.toFixed(2)+' s'],['Free',cnt('F')],['Occupied',cnt('O')],['Booked (held)',cnt('B')]];
+ if(f.tick!=null)rows.push(['Sensor tick',f.tick]);
+ if(f.torn)rows.push(['Torn zones in this frame',f.torn.length?f.torn.join(', '):'none']);
+ if(f.dup)rows.push(['Double-booked bays',f.dup.length?f.dup.join(', '):'none']);
+ if(f.results){const r=Object.values(f.results);rows.push(['Booking results',['BOOKED','FULL','DUPLICATE'].map(k=>k.toLowerCase()+' '+r.filter(x=>x===k).length).join(' · ')]);}
+ if(f.nearest)rows.push(['Nearest free bay',f.nearest]);
+ $('o6Kv').innerHTML=rows.map(([k,v])=>`<div>${k}</div><div class="mono">${esc(v)}</div>`).join('');
+ o6Timeline(fr);
+}
+function o6Timeline(fr){
+ const box=$('o6Log');
+ if(O6.logN!==fr.length){O6.logN=fr.length;
+  box.innerHTML=fr.map((f,i)=>`<div data-i="${i}" onclick="o6Seek(${i})" style="cursor:pointer${(f.torn&&f.torn.length)||(f.dup&&f.dup.length)?';color:var(--bad)':''}">${String(f.t.toFixed(2)).padStart(6)} s  ${esc(f.phase.padEnd(9))} ${esc(f.msg||('tick '+(f.tick??'')))}</div>`).join('')||'<div class="mute">no frames yet</div>';}
+ box.querySelectorAll('div.cur').forEach(x=>x.classList.remove('cur'));
+ const cur=box.querySelector(`div[data-i="${O6.idx}"]`);
+ if(cur){cur.classList.add('cur');if(O6.playing)cur.scrollIntoView({block:'nearest'});}
+}
+function o6Tick(){
+ const n=o6Frames().length;
+ if(O6.playing&&O6.idx<n-1){O6.idx++;o6Draw();}
+ else if(O6.auto===true&&O6.view==='OS6-1'&&O6.data['OS6-1']&&O6.data['OS6-1'].done&&O6.idx>=n-1){
+  // "Test OS6": after OS6-1 has played to the end, move on to OS6-2 of the same batch
+  const nx=lastRun('OS6-2'),d2=O6.data['OS6-2'];
+  if(nx&&nx.batch_id===O6.batch&&d2&&d2.run===nx.run_id&&d2.frames.length){
+   O6.auto='switching';
+   setTimeout(()=>{if(O6.auto==='switching'){O6.auto=false;O6.view='OS6-2';O6.idx=0;O6.playing=true;O6.logN=-1;o6RenderRuns();o6Draw();}},1500);}
+ }
+ else if(O6.playing&&n&&O6.idx>=n-1){const d=O6.data[O6.view];if(d&&d.done){O6.playing=false;o6Draw();}}
+ setTimeout(o6Tick,1000/(+$('o6Speed').value||8));
+}
+setInterval(o6Poll,700);o6Tick();
+
 loadRegistry().then(refreshRuns);refreshNode();
 setInterval(refreshNode,1000);setInterval(refreshRuns,1500);setInterval(()=>refreshDetail(false),1000);
 </script></body></html>

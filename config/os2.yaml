@@ -12,6 +12,7 @@ paths:
   schema: sql/schema.sql
   static: src/ui/static
   socket: /tmp/songdo_os2.sock
+  path_geojson: data/os2_central_park_pathway2_SAMPLE.geojson   # robot path drawn on the live map
 
 network:
   api_host: 127.0.0.1
@@ -28,6 +29,11 @@ sensor:
 
 rules:
   - {name: obstacle_estop, sensor: LIDAR_PROXIMITY_M, op: "<", threshold: 0.8, actuator: SAFETY_ESTOP_LATCH, command: 1, ttl_s: 0.5}
+
+map:                          # live 2D map page: http://127.0.0.1:8002/map
+  scene: os2_park
+  defaults:
+    SAFETY_ESTOP_LATCH: 0     # 0 = clear, 1 = latched (stop)
 
 supervisor:
   max_restarts: 5

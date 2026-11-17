@@ -29,6 +29,12 @@ sensor:
 rules:
   - {name: flood_relief, sensor: SLUICE_WATER_LEVEL_M, op: ">", threshold: 2.8, actuator: BACKUP_SLUICE_GATE_OPEN, command: 1, ttl_s: 60.0}
 
+map:                          # live 2D map page: http://127.0.0.1:8005/map
+  scene: os5_sluice
+  defaults:
+    BACKUP_SLUICE_GATE_OPEN: 0   # 0 = closed, 1 = open
+  faults: [kill_processor]    # map button: SIGKILL the Processor (OS5-5 compound failure demo)
+
 supervisor:
   max_restarts: 5
   window_s: 60
