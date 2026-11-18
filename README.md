@@ -39,7 +39,7 @@ for **162/162** obstacles while offline · the live dashboard keeps *Conserved: 
 4. [What each scenario demonstrates](#what-each-scenario-demonstrates)
 5. [Results (screenshots)](#results)
 6. [File layout](#file-layout-as-in-the-course-readme)
-7. [Operations: systemd, backup, container](#operations) (results: Results §7)
+7. [Operations: systemd, backup, container, demo video](#operations) (results: Results §7)
 8. [Requirement map](#requirement-map-handbook-rubric--where-it-is)
 9. [Known limitations](#known-limitations)
 
@@ -574,6 +574,18 @@ pstree -p -a $(pgrep -f "python.*supervisor")               # process hierarchy
 ps -p <PID> -o pid,ppid,user,%cpu,rss,time,stat,wchan:20    # one process
 ss -xlp | grep songdo                                       # Unix domain sockets
 vmstat 1 5                                                  # context switches, run queue
+```
+
+**Recording the demo video** (`scripts/demo/`). The final-term video's console demo is
+recorded from a real node, not edited by hand: Playwright drives the console through
+*Run all 25 → NODE-OUTAGE (WAN cut 60 s) → Live node WAN cut / restore / reconcile*, and an
+injected overlay draws the cursor, captions and a speed badge. Long waits are logged to
+`segments.json` and sped up afterwards (the 25-scenario batch at 2×, NODE-OUTAGE at 4×).
+```bash
+bash scripts/start_demo.sh OS2 --fresh                      # terminal 1: a clean node on :8002
+pip install playwright && python -m playwright install chromium
+python scripts/demo/record_demo.py --out /tmp/demo          # ~5 min real time, writes raw/ + segments.json
+python scripts/demo/assemble_demo.py --out /tmp/demo        # ffmpeg → /tmp/demo/TeamA_Demo.mp4 (~3 min, no audio)
 ```
 
 ---
